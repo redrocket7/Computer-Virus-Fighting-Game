@@ -1,4 +1,8 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
@@ -21,13 +25,18 @@ public class PlayerHUD : MonoBehaviour
     [Header("Game Over")]
     [SerializeField] string gameOverMessage = "GAME OVER";
     [SerializeField] Color gameOverColor = new Color(0.95f, 0.26f, 0.26f);
+    [SerializeField] string restartButtonLabel = "RESTART";
+    [SerializeField] Color restartButtonColor = new Color(0.18f, 0.18f, 0.2f, 0.95f);
+    [SerializeField] Color restartLabelColor = Color.white;
 
     RectTransform healthFill;
     Image healthFillImage;
     Text healthLabel;
     Text weaponLabel;
     GameObject gameOverRoot;
+    Button restartButton;
     Font font;
+    bool isGameOver;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -47,6 +56,7 @@ public class PlayerHUD : MonoBehaviour
     void Awake()
     {
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        EnsureEventSystem();
         BuildCanvas();
         BuildHealthBar();
         BuildWeaponLabel();
@@ -67,7 +77,7 @@ public class PlayerHUD : MonoBehaviour
 
         OnHealthChanged(player.CurrentHealth, player.MaxHealth);
         OnWeaponChanged(player.CurrentWeaponName);
-        gameOverRoot.SetActive(player.IsDead);
+        SetGameOverVisible(player.IsDead);
     }
 
     void OnDisable()
@@ -78,6 +88,15 @@ public class PlayerHUD : MonoBehaviour
         player.HealthChanged -= OnHealthChanged;
         player.Died -= OnPlayerDied;
         player.WeaponChanged -= OnWeaponChanged;
+    }
+
+    void Update()
+    {
+        if (!isGameOver)
+            return;
+
+        if (WasRestartPressed())
+            RestartRun();
     }
 
     void OnHealthChanged(float current, float max)
@@ -108,7 +127,60 @@ public class PlayerHUD : MonoBehaviour
 
     void OnPlayerDied()
     {
-        gameOverRoot.SetActive(true);
+        SetGameOverVisible(true);
+    }
+
+    void SetGameOverVisible(bool visible)
+    {
+        isGameOver = visible;
+        if (gameOverRoot != null)
+            gameOverRoot.SetActive(visible);
+
+        if (!visible || restartButton == null)
+            return;
+
+        // Make the button immediately usable with keyboard / gamepad Submit.
+        EventSystem eventSystem = EventSystem.current;
+        if (eventSystem != null)
+            eventSystem.SetSelectedGameObject(restartButton.gameObject);
+    }
+
+    void RestartRun()
+    {
+        Time.timeScale = 1f;
+        Scene active = SceneManager.GetActiveScene();
+        SceneManager.LoadScene(active.buildIndex >= 0 ? active.buildIndex : active.name);
+    }
+
+    static bool WasRestartPressed()
+    {
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null &&
+            (keyboard.enterKey.wasPressedThisFrame ||
+             keyboard.numpadEnterKey.wasPressedThisFrame ||
+             keyboard.spaceKey.wasPressedThisFrame ||
+             keyboard.rKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+
+        Gamepad gamepad = Gamepad.current;
+        if (gamepad != null &&
+            (gamepad.buttonSouth.wasPressedThisFrame || gamepad.startButton.wasPressedThisFrame))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    static void EnsureEventSystem()
+    {
+        if (FindAnyObjectByType<EventSystem>() != null)
+            return;
+
+        var go = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
+        DontDestroyOnLoad(go);
     }
 
     void BuildCanvas()
@@ -170,6 +242,7 @@ public class PlayerHUD : MonoBehaviour
     void BuildGameOverBanner()
     {
         Image dim = CreateImage("Game Over", transform, new Color(0f, 0f, 0f, 0.65f));
+        dim.raycastTarget = true;
         RectTransform dimRect = dim.rectTransform;
         dimRect.anchorMin = Vector2.zero;
         dimRect.anchorMax = Vector2.one;
@@ -179,13 +252,60 @@ public class PlayerHUD : MonoBehaviour
         Text label = CreateText("Message", dimRect, gameOverMessage, 96, gameOverColor, TextAnchor.MiddleCenter);
         label.fontStyle = FontStyle.Bold;
         RectTransform labelRect = label.rectTransform;
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
+        labelRect.anchorMin = new Vector2(0f, 0.45f);
+        labelRect.anchorMax = new Vector2(1f, 0.75f);
         labelRect.offsetMin = Vector2.zero;
         labelRect.offsetMax = Vector2.zero;
 
+        restartButton = CreateButton("Restart", dimRect, restartButtonLabel, restartButtonColor, restartLabelColor);
+        RectTransform buttonRect = restartButton.GetComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(0.5f, 0.28f);
+        buttonRect.anchorMax = new Vector2(0.5f, 0.28f);
+        buttonRect.pivot = new Vector2(0.5f, 0.5f);
+        buttonRect.sizeDelta = new Vector2(280f, 64f);
+        buttonRect.anchoredPosition = Vector2.zero;
+        restartButton.onClick.AddListener(RestartRun);
+
+        Text hint = CreateText(
+            "Hint",
+            dimRect,
+            "Click Restart  ·  Enter / Space / A",
+            22,
+            new Color(1f, 1f, 1f, 0.7f),
+            TextAnchor.MiddleCenter);
+        RectTransform hintRect = hint.rectTransform;
+        hintRect.anchorMin = new Vector2(0f, 0.14f);
+        hintRect.anchorMax = new Vector2(1f, 0.22f);
+        hintRect.offsetMin = Vector2.zero;
+        hintRect.offsetMax = Vector2.zero;
+
         gameOverRoot = dim.gameObject;
         gameOverRoot.SetActive(false);
+    }
+
+    Button CreateButton(string name, Transform parent, string label, Color backgroundColor, Color labelColor)
+    {
+        Image background = CreateImage(name, parent, backgroundColor);
+        background.raycastTarget = true;
+
+        var button = background.gameObject.AddComponent<Button>();
+        ColorBlock colors = button.colors;
+        colors.normalColor = Color.white;
+        colors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f);
+        colors.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f);
+        colors.selectedColor = new Color(1.1f, 1.1f, 1.1f, 1f);
+        button.colors = colors;
+        button.targetGraphic = background;
+
+        Text text = CreateText("Label", background.transform, label, 28, labelColor, TextAnchor.MiddleCenter);
+        text.fontStyle = FontStyle.Bold;
+        RectTransform textRect = text.rectTransform;
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
+
+        return button;
     }
 
     static Image CreateImage(string name, Transform parent, Color color)

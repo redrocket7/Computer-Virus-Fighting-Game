@@ -57,27 +57,32 @@ public static class WorldTriplanarMaterialUtility
             if (source.HasProperty("_EmissionColor") && clone.HasProperty("_EmissionColor"))
                 clone.SetColor("_EmissionColor", source.GetColor("_EmissionColor"));
 
-            // Match Yughues / URP Lit keyword setup.
-            bool specular = source.IsKeywordEnabled("_SPECULAR_SETUP") ||
-                            (source.HasProperty("_WorkflowMode") && Mathf.Approximately(source.GetFloat("_WorkflowMode"), 0f));
-            SetKeyword(clone, "_SPECULAR_SETUP", specular);
+            // Match Yughues / URP Lit specular setup.
+            SetKeyword(clone, "_SPECULAR_SETUP", true);
             if (clone.HasProperty("_SpecularSetup"))
-                clone.SetFloat("_SpecularSetup", specular ? 1f : 0f);
+                clone.SetFloat("_SpecularSetup", 1f);
+            if (clone.HasProperty("_WorkflowMode"))
+                clone.SetFloat("_WorkflowMode", 0f);
 
             bool hasNormal = source.GetTexture("_BumpMap") != null;
             SetKeyword(clone, "_NORMALMAP", hasNormal);
             if (clone.HasProperty("_NormalMapOn"))
                 clone.SetFloat("_NormalMapOn", hasNormal ? 1f : 0f);
 
-            bool hasMetalSpec = source.GetTexture("_MetallicGlossMap") != null || source.GetTexture("_SpecGlossMap") != null;
-            SetKeyword(clone, "_METALLICSPECGLOSSMAP", hasMetalSpec);
+            SetKeyword(clone, "_METALLICSPECGLOSSMAP", true);
             if (clone.HasProperty("_MetallicSpecMapOn"))
-                clone.SetFloat("_MetallicSpecMapOn", hasMetalSpec ? 1f : 0f);
+                clone.SetFloat("_MetallicSpecMapOn", 1f);
 
             bool hasEmission = source.IsKeywordEnabled("_EMISSION");
             SetKeyword(clone, "_EMISSION", hasEmission);
             if (clone.HasProperty("_EmissionOn"))
                 clone.SetFloat("_EmissionOn", hasEmission ? 1f : 0f);
+
+            if (clone.HasProperty("_Smoothness"))
+            {
+                float smoothness = source.HasProperty("_Smoothness") ? source.GetFloat("_Smoothness") : 1f;
+                clone.SetFloat("_Smoothness", smoothness);
+            }
 
             // Sensible default: one tile every 4 world units.
             if (clone.HasProperty("_WorldTiling"))
