@@ -1,0 +1,474 @@
+using UnityEngine;
+using UnityEngine.AI;
+
+/// <summary>
+/// Enemy chase AI (NavMesh) + health.
+/// Tune movement on the NavMeshAgent. Bake a NavMesh before Play.
+/// </summary>
+[RequireComponent(typeof(NavMeshAgent))]
+public class EnemyAI : MonoBehaviour, IDamageable
+{
+    [Header("Target")]
+    [Tooltip("Leave empty to auto-find the player (PlayerController, then tag \"Player\").")]
+    [SerializeField] Transform player;
+    [SerializeField] float pathRefreshInterval = 0.2f;
+
+    [Header("Health")]
+    [SerializeField] float maxHealth = 1f;
+
+    [Header("Contact Damage")]
+    [Tooltip("Damage dealt to the player on touch. Set to 0 for enemies that attack another way.")]
+    [SerializeField] float contactDamage = 1f;
+    [Tooltip("Flat XZ distance to the player required to land a hit.")]
+    [SerializeField] float attackRange = 2f;
+    [Tooltip("Seconds between repeated hits while touching the player.")]
+    [SerializeField] float attackInterval = 1f;
+
+    [Header("Death")]
+    [SerializeField] GameObject deathEffectPrefab;
+    [SerializeField] float deathEffectHeight = 0.35f;
+
+    protected NavMeshAgent Agent { get; private set; }
+    protected Transform Player { get; private set; }
+
+    float pathRefreshTimer;
+    float attackTimer;
+    float currentHealth;
+    IDamageable playerDamageable;
+    float combatHoldoff;
+    float playerFindRetryTimer;
+
+    float baseMoveSpeed = -1f;
+    float moveSpeedMultiplier = 1f;
+    float damageMultiplier = 1f;
+    float fireRateMultiplier = 1f;
+    int damageBuffStacks;
+    int healthBuffStacks;
+    int speedBuffStacks;
+    int fireRateBuffStacks;
+    EnemyShield equippedShield;
+
+    public bool IsChasing { get; protected set; }
+    public float DamageMultiplier => damageMultiplier;
+    public float CurrentHealth => currentHealth;
+    public float MaxHealth => maxHealth;
+    public bool IsDamaged => currentHealth > 0f && currentHealth < maxHealth - 0.001f;
+    public bool IsAlive => currentHealth > 0f;
+    public RoomEncounter BoundEncounter => boundEncounter;
+
+    protected bool CanAct => combatHoldoff <= 0f;
+
+    protected RoomEncounter boundEncounter;
+
+    protected virtual void Awake()
+    {
+        Agent = GetComponent<NavMeshAgent>();
+        Agent.updateRotation = false;
+        currentHealth = maxHealth;
+        CacheBaseMoveSpeed();
+    }
+
+    protected virtual void Start()
+    {
+        if (player == null)
+            FindPlayer();
+
+        Player = player;
+        CacheBaseMoveSpeed();
+    }
+
+    protected virtual void Update()
+    {
+        TickHoldoff();
+        if (!CanAct)
+            return;
+
+        UpdateChase();
+        UpdateContactDamage();
+    }
+
+    public void SetCombatHoldoff(float seconds)
+    {
+        combatHoldoff = Mathf.Max(0f, seconds);
+        if (combatHoldoff <= 0f || Agent == null || !Agent.isOnNavMesh)
+            return;
+
+        StopAgentPath();
+        IsChasing = false;
+    }
+
+    /// <summary>
+    /// Stops NavMesh motion without resetting the path every frame.
+    /// </summary>
+    protected void StopAgentPath()
+    {
+        if (Agent == null || !Agent.isOnNavMesh)
+            return;
+
+        if (Agent.isStopped && !Agent.hasPath)
+            return;
+
+        Agent.isStopped = true;
+        if (Agent.hasPath)
+            Agent.ResetPath();
+    }
+
+    protected void TickHoldoff()
+    {
+        if (combatHoldoff <= 0f)
+            return;
+
+        combatHoldoff -= Time.deltaTime;
+        if (combatHoldoff > 0f)
+            return;
+
+        combatHoldoff = 0f;
+        if (Agent != null && Agent.isOnNavMesh)
+            Agent.isStopped = false;
+    }
+
+    protected void UpdateContactDamage()
+    {
+        if (attackTimer > 0f)
+            attackTimer -= Time.deltaTime;
+
+        if (contactDamage <= 0f || Player == null || attackTimer > 0f)
+            return;
+
+        Vector3 offset = Player.position - transform.position;
+        offset.y = 0f;
+        if (offset.sqrMagnitude > attackRange * attackRange)
+            return;
+
+        if (playerDamageable == null)
+            playerDamageable = Player.GetComponentInParent<IDamageable>();
+
+        if (playerDamageable == null)
+            return;
+
+        playerDamageable.TakeDamage(ScaleOutgoingDamage(contactDamage));
+        attackTimer = attackInterval;
+    }
+
+    /// <summary>Who this enemy paths toward. Override for support units that stick to allies.</summary>
+    protected virtual Transform GetChaseTarget()
+    {
+        return Player;
+    }
+
+    /// <summary>How close is “close enough” to the chase target.</summary>
+    protected virtual float GetChaseStopDistance()
+    {
+        return Agent != null ? Agent.stoppingDistance : 0.5f;
+    }
+
+    protected void UpdateChase()
+    {
+        if (player == null)
+        {
+            playerFindRetryTimer -= Time.deltaTime;
+            if (playerFindRetryTimer <= 0f)
+            {
+                playerFindRetryTimer = 0.5f;
+                FindPlayer();
+            }
+
+            Player = player;
+            StopAgentPath();
+            IsChasing = false;
+            return;
+        }
+
+        Player = player;
+        Transform chaseTarget = GetChaseTarget();
+        if (chaseTarget == null)
+            chaseTarget = Player;
+
+        if (!Agent.isOnNavMesh)
+        {
+            IsChasing = false;
+            return;
+        }
+
+        float stopDistance = Mathf.Max(0.1f, GetChaseStopDistance());
+        pathRefreshTimer -= Time.deltaTime;
+        bool refreshPath = pathRefreshTimer <= 0f;
+        if (refreshPath)
+        {
+            pathRefreshTimer = pathRefreshInterval;
+            Agent.isStopped = false;
+            Agent.SetDestination(chaseTarget.position);
+        }
+
+        // Sample remainingDistance only on repath frames — it forces path length work.
+        bool arrived = !Agent.pathPending &&
+                       (refreshPath
+                           ? Agent.remainingDistance <= stopDistance
+                           : Agent.desiredVelocity.sqrMagnitude < 0.01f &&
+                             (chaseTarget.position - transform.position).sqrMagnitude <=
+                             stopDistance * stopDistance);
+
+        if (arrived)
+        {
+            StopAgentPath();
+            FaceDirection(chaseTarget.position - transform.position);
+            IsChasing = false;
+            return;
+        }
+
+        Agent.isStopped = false;
+        IsChasing = Agent.desiredVelocity.sqrMagnitude > 0.01f;
+
+        if (IsChasing)
+            FaceDirection(Agent.desiredVelocity);
+    }
+
+    public virtual void TakeDamage(float amount)
+    {
+        if (amount <= 0f || currentHealth <= 0f)
+            return;
+
+        if (HasActiveShield)
+        {
+            equippedShield.AbsorbDamage(amount);
+            return;
+        }
+
+        currentHealth -= amount;
+        if (currentHealth <= 0f)
+            Die();
+    }
+
+    public bool HasActiveShield => equippedShield != null && equippedShield.IsActive;
+
+    /// <summary>
+    /// Spawns a see-through dome shield around this enemy.
+    /// </summary>
+    public void GrantShield(float shieldHealth, float radiusMultiplier = 1f)
+    {
+        if (!IsAlive || HasActiveShield || shieldHealth <= 0f)
+            return;
+
+        float radius = 2.2f;
+        if (Agent != null)
+            radius = Mathf.Max(1.4f, Agent.radius * 1.85f + 0.75f);
+        radius *= Mathf.Max(0.25f, radiusMultiplier);
+
+        var shieldObject = new GameObject("Hex Shield Dome");
+        shieldObject.transform.SetParent(transform, false);
+        shieldObject.transform.localPosition = Vector3.up * (radius * 0.15f);
+        shieldObject.layer = gameObject.layer;
+
+        equippedShield = shieldObject.AddComponent<EnemyShield>();
+        equippedShield.Initialize(this, shieldHealth, radius);
+    }
+
+    public void NotifyShieldBroken()
+    {
+        equippedShield = null;
+    }
+
+    public float ScaleOutgoingDamage(float amount)
+    {
+        return amount * damageMultiplier;
+    }
+
+    public void Heal(float amount)
+    {
+        if (amount <= 0f || currentHealth <= 0f)
+            return;
+
+        currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
+    }
+
+    public bool TryApplyDamageBuff(float multiplier, int maxStacks)
+    {
+        if (multiplier <= 0f || damageBuffStacks >= Mathf.Max(1, maxStacks))
+            return false;
+
+        damageBuffStacks++;
+        damageMultiplier *= multiplier;
+        return true;
+    }
+
+    public bool TryApplyMaxHealthBuff(float multiplier, int maxStacks)
+    {
+        if (multiplier <= 0f || healthBuffStacks >= Mathf.Max(1, maxStacks))
+            return false;
+
+        healthBuffStacks++;
+        float previousMax = maxHealth;
+        maxHealth *= multiplier;
+        currentHealth += maxHealth - previousMax;
+        return true;
+    }
+
+    public bool TryApplySpeedBuff(float multiplier, int maxStacks)
+    {
+        if (multiplier <= 0f || speedBuffStacks >= Mathf.Max(1, maxStacks))
+            return false;
+
+        speedBuffStacks++;
+        CacheBaseMoveSpeed();
+        moveSpeedMultiplier *= multiplier;
+        RefreshMoveSpeed();
+        return true;
+    }
+
+    public bool TryApplyFireRateBuff(float multiplier, int maxStacks)
+    {
+        if (!SupportsFireRateBuff || multiplier <= 0f || fireRateBuffStacks >= Mathf.Max(1, maxStacks))
+            return false;
+
+        fireRateBuffStacks++;
+        fireRateMultiplier *= multiplier;
+        return true;
+    }
+
+    public bool CanReceiveDamageBuff(int maxStacks) =>
+        damageBuffStacks < Mathf.Max(1, maxStacks);
+
+    public bool CanReceiveMaxHealthBuff(int maxStacks) =>
+        healthBuffStacks < Mathf.Max(1, maxStacks);
+
+    public bool CanReceiveSpeedBuff(int maxStacks) =>
+        speedBuffStacks < Mathf.Max(1, maxStacks);
+
+    public bool CanReceiveFireRateBuff(int maxStacks) =>
+        SupportsFireRateBuff && fireRateBuffStacks < Mathf.Max(1, maxStacks);
+
+    /// <summary>
+    /// Shooting enemies override this so Overclock can buff their fire rate.
+    /// </summary>
+    protected virtual bool SupportsFireRateBuff => false;
+
+    /// <summary>
+    /// Converts a base fire interval into the current buffed interval (higher multiplier = faster shots).
+    /// </summary>
+    protected float ScaleFireInterval(float baseInterval)
+    {
+        return baseInterval / Mathf.Max(0.01f, fireRateMultiplier);
+    }
+
+    public float GetBaseMoveSpeed()
+    {
+        CacheBaseMoveSpeed();
+        return baseMoveSpeed;
+    }
+
+    public float GetCurrentMoveSpeed()
+    {
+        CacheBaseMoveSpeed();
+        return baseMoveSpeed * moveSpeedMultiplier;
+    }
+
+    public void RefreshMoveSpeed()
+    {
+        if (Agent == null)
+            return;
+
+        CacheBaseMoveSpeed();
+        Agent.speed = baseMoveSpeed * moveSpeedMultiplier;
+    }
+
+    public bool IsAlliedWith(EnemyAI other)
+    {
+        if (other == null || other == this || !other.IsAlive)
+            return false;
+
+        if (boundEncounter == null || other.boundEncounter == null)
+            return true;
+
+        return boundEncounter == other.boundEncounter;
+    }
+
+    public void BindEncounter(RoomEncounter encounter)
+    {
+        boundEncounter = encounter;
+    }
+
+    protected virtual void Die()
+    {
+        SpawnDeathEffect();
+        Destroy(gameObject);
+    }
+
+    protected void SpawnDeathEffect()
+    {
+        if (deathEffectPrefab == null)
+            return;
+
+        Vector3 spawnPoint = transform.position + Vector3.up * deathEffectHeight;
+        GameObject effect = Instantiate(deathEffectPrefab, spawnPoint, Quaternion.identity);
+        Destroy(effect, DeathEffect.GetPoolLifetime(effect));
+    }
+
+    protected virtual void OnDestroy()
+    {
+        boundEncounter?.NotifyEnemyDestroyed(this);
+        boundEncounter = null;
+    }
+
+    protected void FindPlayer()
+    {
+        if (PlayerController.Instance != null)
+        {
+            player = PlayerController.Instance.transform;
+            return;
+        }
+
+        var controller = FindAnyObjectByType<PlayerController>();
+        if (controller != null)
+        {
+            player = controller.transform;
+            return;
+        }
+
+        GameObject tagged = GameObject.FindGameObjectWithTag("Player");
+        if (tagged != null)
+            player = tagged.transform;
+    }
+
+    protected void FaceDirection(Vector3 direction)
+    {
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.001f)
+            return;
+
+        Quaternion targetRotation = Quaternion.LookRotation(direction, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation,
+            targetRotation,
+            Agent.angularSpeed * Time.deltaTime);
+    }
+
+    void CacheBaseMoveSpeed()
+    {
+        if (baseMoveSpeed >= 0f || Agent == null)
+            return;
+
+        baseMoveSpeed = Agent.speed;
+    }
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        if (Agent == null)
+            Agent = GetComponent<NavMeshAgent>();
+
+        if (Agent != null)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawWireSphere(transform.position, Agent.stoppingDistance);
+
+            if (Agent.hasPath)
+            {
+                Gizmos.color = Color.cyan;
+                var path = Agent.path.corners;
+                for (int i = 0; i < path.Length - 1; i++)
+                    Gizmos.DrawLine(path[i], path[i + 1]);
+            }
+        }
+    }
+#endif
+}
