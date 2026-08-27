@@ -149,7 +149,10 @@ public class PlayerHUD : MonoBehaviour
     {
         Time.timeScale = 1f;
         Scene active = SceneManager.GetActiveScene();
-        SceneManager.LoadScene(active.buildIndex >= 0 ? active.buildIndex : active.name);
+        if (active.buildIndex >= 0)
+            SceneManager.LoadScene(active.buildIndex);
+        else
+            SceneManager.LoadScene(active.name);
     }
 
     static bool WasRestartPressed()
