@@ -49,6 +49,10 @@ public class RepairEnemyAI : EnemyAI
         return supportTarget != null ? supportTarget.transform : Player;
     }
 
+    protected override bool ShowSupportPriorityMarker => true;
+
+    public override bool IsSupportEnemy => true;
+
     protected override float GetChaseStopDistance()
     {
         if (supportTarget != null)
@@ -58,7 +62,7 @@ public class RepairEnemyAI : EnemyAI
 
     EnemyAI FindClosestAlly()
     {
-        CollectAllies(allySearchBuffer, allySearchRadius, damagedOnly: false);
+        CollectAllies(allySearchBuffer, allySearchRadius, damagedOnly: false, excludeSupportEnemies: true);
         EnemyAI closest = null;
         float bestSqr = float.MaxValue;
         for (int i = 0; i < allySearchBuffer.Count; i++)
@@ -85,7 +89,7 @@ public class RepairEnemyAI : EnemyAI
         if (amount <= 0f)
             return;
 
-        CollectAllies(alliesInRange, healRadius, damagedOnly: true);
+        CollectAllies(alliesInRange, healRadius, damagedOnly: true, excludeSupportEnemies: false);
         if (alliesInRange.Count == 0)
             return;
 
@@ -103,7 +107,7 @@ public class RepairEnemyAI : EnemyAI
             healEffect.Play();
     }
 
-    void CollectAllies(List<EnemyAI> results, float radius, bool damagedOnly)
+    void CollectAllies(List<EnemyAI> results, float radius, bool damagedOnly, bool excludeSupportEnemies)
     {
         results.Clear();
         float radiusSqr = radius * radius;
@@ -114,7 +118,11 @@ public class RepairEnemyAI : EnemyAI
             for (int i = results.Count - 1; i >= 0; i--)
             {
                 EnemyAI ally = results[i];
-                if (ally == null || ally == this || !IsAlliedWith(ally) || (damagedOnly && !ally.IsDamaged))
+                if (ally == null ||
+                    ally == this ||
+                    !IsAlliedWith(ally) ||
+                    (excludeSupportEnemies && ally.IsSupportEnemy) ||
+                    (damagedOnly && !ally.IsDamaged))
                 {
                     results.RemoveAt(i);
                     continue;
@@ -143,7 +151,11 @@ public class RepairEnemyAI : EnemyAI
                 continue;
 
             EnemyAI ally = hit.GetComponentInParent<EnemyAI>();
-            if (ally == null || !IsAlliedWith(ally) || (damagedOnly && !ally.IsDamaged) || results.Contains(ally))
+            if (ally == null ||
+                !IsAlliedWith(ally) ||
+                (excludeSupportEnemies && ally.IsSupportEnemy) ||
+                (damagedOnly && !ally.IsDamaged) ||
+                results.Contains(ally))
                 continue;
 
             results.Add(ally);

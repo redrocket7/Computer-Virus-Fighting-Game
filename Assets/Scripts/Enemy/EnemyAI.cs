@@ -75,7 +75,16 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
         Player = player;
         CacheBaseMoveSpeed();
+
+        if (ShowSupportPriorityMarker)
+            SupportPriorityMarker.EnsureOn(this);
     }
+
+    /// <summary>When true, shows a kill-first priority marker (Repair / Overclock).</summary>
+    protected virtual bool ShowSupportPriorityMarker => false;
+
+    /// <summary>Repair / Overclock-style supports. Other supports won't cling to these.</summary>
+    public virtual bool IsSupportEnemy => false;
 
     protected virtual void Update()
     {
@@ -322,6 +331,54 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
         fireRateBuffStacks++;
         fireRateMultiplier *= multiplier;
+        return true;
+    }
+
+    public bool TryRemoveDamageBuff(float multiplier)
+    {
+        if (damageBuffStacks <= 0 || multiplier <= 0.0001f)
+            return false;
+
+        damageBuffStacks--;
+        damageMultiplier /= multiplier;
+        return true;
+    }
+
+    public bool TryRemoveMaxHealthBuff(float multiplier)
+    {
+        if (healthBuffStacks <= 0 || multiplier <= 0.0001f)
+            return false;
+
+        healthBuffStacks--;
+        float previousMax = maxHealth;
+        maxHealth /= multiplier;
+        currentHealth -= previousMax - maxHealth;
+        if (currentHealth > maxHealth)
+            currentHealth = maxHealth;
+        if (currentHealth > 0f && currentHealth < 0.01f)
+            currentHealth = Mathf.Min(0.01f, maxHealth);
+        return true;
+    }
+
+    public bool TryRemoveSpeedBuff(float multiplier)
+    {
+        if (speedBuffStacks <= 0 || multiplier <= 0.0001f)
+            return false;
+
+        speedBuffStacks--;
+        CacheBaseMoveSpeed();
+        moveSpeedMultiplier /= multiplier;
+        RefreshMoveSpeed();
+        return true;
+    }
+
+    public bool TryRemoveFireRateBuff(float multiplier)
+    {
+        if (fireRateBuffStacks <= 0 || multiplier <= 0.0001f)
+            return false;
+
+        fireRateBuffStacks--;
+        fireRateMultiplier /= multiplier;
         return true;
     }
 

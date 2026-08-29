@@ -42,15 +42,36 @@ public class OverclockEnemyAI : EnemyAI
     readonly List<EnemyAI> alliesInRange = new List<EnemyAI>();
     readonly List<EnemyAI> allySearchBuffer = new List<EnemyAI>();
     readonly List<OverclockBuffType> validBuffs = new List<OverclockBuffType>(4);
+    readonly List<AppliedOverclockBuff> appliedBuffs = new List<AppliedOverclockBuff>(8);
     readonly Collider[] overlapHits = new Collider[32];
 
     EnemyAI supportTarget;
     float buffTimer;
+    bool buffsRevoked;
+
+    struct AppliedOverclockBuff
+    {
+        public EnemyAI Target;
+        public OverclockBuffType Type;
+        public float Multiplier;
+    }
 
     protected override void Start()
     {
         base.Start();
         buffTimer = buffInterval * 0.35f;
+    }
+
+    protected override void Die()
+    {
+        RevokeAppliedBuffs();
+        base.Die();
+    }
+
+    protected override void OnDestroy()
+    {
+        RevokeAppliedBuffs();
+        base.OnDestroy();
     }
 
     protected override void Update()
@@ -75,6 +96,10 @@ public class OverclockEnemyAI : EnemyAI
     {
         return supportTarget != null ? supportTarget.transform : Player;
     }
+
+    protected override bool ShowSupportPriorityMarker => true;
+
+    public override bool IsSupportEnemy => true;
 
     protected override float GetChaseStopDistance()
     {
@@ -131,14 +156,43 @@ public class OverclockEnemyAI : EnemyAI
         if (!TryPickBuff(target, out OverclockBuffType buffType))
             return;
 
-        if (!ApplyBuff(target, buffType))
+        if (!ApplyBuff(target, buffType, out float multiplier))
             return;
+
+        appliedBuffs.Add(new AppliedOverclockBuff
+        {
+            Target = target,
+            Type = buffType,
+            Multiplier = multiplier
+        });
+        OverclockBuffVisual.AddStack(target);
 
         if (buffEffect != null)
         {
             buffEffect.transform.position = target.transform.position + Vector3.up * 1.2f;
             buffEffect.Play();
         }
+    }
+
+    void RevokeAppliedBuffs()
+    {
+        if (buffsRevoked)
+            return;
+
+        buffsRevoked = true;
+        for (int i = 0; i < appliedBuffs.Count; i++)
+        {
+            AppliedOverclockBuff buff = appliedBuffs[i];
+            if (buff.Target == null)
+                continue;
+
+            if (buff.Target.IsAlive)
+                RemoveBuff(buff.Target, buff.Type, buff.Multiplier);
+
+            OverclockBuffVisual.RemoveStack(buff.Target);
+        }
+
+        appliedBuffs.Clear();
     }
 
     void CollectAllies(List<EnemyAI> results, float radius, bool damagedOnly, bool roomWide)
@@ -152,7 +206,11 @@ public class OverclockEnemyAI : EnemyAI
             for (int i = results.Count - 1; i >= 0; i--)
             {
                 EnemyAI ally = results[i];
-                if (ally == null || ally == this || !IsAlliedWith(ally) || (damagedOnly && !ally.IsDamaged))
+                if (ally == null ||
+                    ally == this ||
+                    !IsAlliedWith(ally) ||
+                    ally.IsSupportEnemy ||
+                    (damagedOnly && !ally.IsDamaged))
                 {
                     results.RemoveAt(i);
                     continue;
@@ -184,7 +242,11 @@ public class OverclockEnemyAI : EnemyAI
                 continue;
 
             EnemyAI ally = hit.GetComponentInParent<EnemyAI>();
-            if (ally == null || !IsAlliedWith(ally) || (damagedOnly && !ally.IsDamaged) || results.Contains(ally))
+            if (ally == null ||
+                !IsAlliedWith(ally) ||
+                ally.IsSupportEnemy ||
+                (damagedOnly && !ally.IsDamaged) ||
+                results.Contains(ally))
                 continue;
 
             results.Add(ally);
@@ -231,16 +293,52 @@ public class OverclockEnemyAI : EnemyAI
         };
     }
 
-    bool ApplyBuff(EnemyAI ally, OverclockBuffType type)
+    bool ApplyBuff(EnemyAI ally, OverclockBuffType type, out float multiplier)
+    {
+        multiplier = GetBuffMultiplier(type);
+        bool applied = type switch
+        {
+            OverclockBuffType.Damage => ally.TryApplyDamageBuff(multiplier, maxStacksPerBuff),
+            OverclockBuffType.MaxHealth => ally.TryApplyMaxHealthBuff(multiplier, maxStacksPerBuff),
+            OverclockBuffType.Speed => ally.TryApplySpeedBuff(multiplier, maxStacksPerBuff),
+            OverclockBuffType.FireRate => ally.TryApplyFireRateBuff(multiplier, maxStacksPerBuff),
+            _ => false
+        };
+
+        if (!applied)
+            multiplier = 0f;
+        return applied;
+    }
+
+    float GetBuffMultiplier(OverclockBuffType type)
     {
         return type switch
         {
-            OverclockBuffType.Damage => ally.TryApplyDamageBuff(damageBuffMultiplier, maxStacksPerBuff),
-            OverclockBuffType.MaxHealth => ally.TryApplyMaxHealthBuff(maxHealthBuffMultiplier, maxStacksPerBuff),
-            OverclockBuffType.Speed => ally.TryApplySpeedBuff(speedBuffMultiplier, maxStacksPerBuff),
-            OverclockBuffType.FireRate => ally.TryApplyFireRateBuff(fireRateBuffMultiplier, maxStacksPerBuff),
-            _ => false
+            OverclockBuffType.Damage => damageBuffMultiplier,
+            OverclockBuffType.MaxHealth => maxHealthBuffMultiplier,
+            OverclockBuffType.Speed => speedBuffMultiplier,
+            OverclockBuffType.FireRate => fireRateBuffMultiplier,
+            _ => 1f
         };
+    }
+
+    static void RemoveBuff(EnemyAI ally, OverclockBuffType type, float multiplier)
+    {
+        switch (type)
+        {
+            case OverclockBuffType.Damage:
+                ally.TryRemoveDamageBuff(multiplier);
+                break;
+            case OverclockBuffType.MaxHealth:
+                ally.TryRemoveMaxHealthBuff(multiplier);
+                break;
+            case OverclockBuffType.Speed:
+                ally.TryRemoveSpeedBuff(multiplier);
+                break;
+            case OverclockBuffType.FireRate:
+                ally.TryRemoveFireRateBuff(multiplier);
+                break;
+        }
     }
 
 #if UNITY_EDITOR

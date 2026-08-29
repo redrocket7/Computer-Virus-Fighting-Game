@@ -83,6 +83,13 @@ public class RoomEncounter : MonoBehaviour
         shieldHealth = Mathf.Max(0.1f, health);
     }
 
+    public void SetSpawnCount(int count)
+    {
+        spawnCount = Mathf.Max(0, count);
+    }
+
+    public int SpawnCount => spawnCount;
+
     public void SetBonusMegaEnemy(GameObject prefab)
     {
         bonusMegaPrefab = prefab;

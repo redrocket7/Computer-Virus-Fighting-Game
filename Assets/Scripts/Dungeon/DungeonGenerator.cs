@@ -64,6 +64,16 @@ public class DungeonGenerator : MonoBehaviour
     [SerializeField] float minimumStraightsBetweenTurns = 2f;
     [SerializeField] float passageOverlapPadding = 0.1f;
 
+    [Header("Depth Scaling")]
+    [Tooltip("Add more enemies in rooms farther from the start (door-hops).")]
+    [SerializeField] bool scaleSpawnCountByDepth = true;
+    [Min(0)]
+    [Tooltip("Extra enemies added per door-hop from the start room.")]
+    [SerializeField] int extraEnemiesPerDepth = 1;
+    [Min(0)]
+    [Tooltip("Hard cap on spawn count after depth scaling. 0 = no cap.")]
+    [SerializeField] int maxSpawnCount = 0;
+
     [Header("Navigation")]
     [SerializeField] int smallAgentTypeId = 0;
     [SerializeField] int fatAgentTypeId = -1372625422;
@@ -73,6 +83,8 @@ public class DungeonGenerator : MonoBehaviour
     [SerializeField] Transform player;
 
     [Header("Fog Cover")]
+    [Tooltip("When enabled, rooms and passages get fog lids until the player reveals them.")]
+    [SerializeField] bool enableFogCover = true;
     [SerializeField] Material fogCoverMaterial;
     [SerializeField] Color fogCoverColor = Color.black;
     [SerializeField] bool fogOverrideMaterialColor = true;
@@ -127,10 +139,12 @@ public class DungeonGenerator : MonoBehaviour
         }
 
         SealUnusedExits();
+        ApplyDepthSpawnScaling();
         AssignMegaEnemy();
         BuildNavigation();
         PlacePlayer(start);
-        EnsureRoomFogCovers();
+        if (enableFogCover)
+            EnsureRoomFogCovers();
         GetComponent<OutOfBoundsCover>()?.Rebuild();
         Debug.Log($"Dungeon generated {placedRooms.Count}/{targetRoomCount} rooms.", this);
         Generated?.Invoke();
@@ -245,31 +259,8 @@ public class DungeonGenerator : MonoBehaviour
         if (placedRooms.Count == 0)
             return null;
 
-        // Depth from start via connected sockets. Prefer shallow rooms so a
-        // successful roll is findable near the beginning of the run.
-        var depthByRoom = new Dictionary<RoomDefinition, int>(placedRooms.Count);
-        var queue = new Queue<RoomDefinition>();
+        Dictionary<RoomDefinition, int> depthByRoom = BuildRoomDepthMap();
         RoomDefinition start = placedRooms[0];
-        depthByRoom[start] = 0;
-        queue.Enqueue(start);
-
-        while (queue.Count > 0)
-        {
-            RoomDefinition current = queue.Dequeue();
-            int depth = depthByRoom[current];
-            foreach (RoomSocket socket in current.Sockets)
-            {
-                if (socket == null || !socket.IsConnected || socket.Connected == null)
-                    continue;
-
-                RoomDefinition neighbor = socket.Connected.Room;
-                if (neighbor == null || depthByRoom.ContainsKey(neighbor))
-                    continue;
-
-                depthByRoom[neighbor] = depth + 1;
-                queue.Enqueue(neighbor);
-            }
-        }
 
         int preferredMax = Mathf.Max(1, megaPreferredMaxDepth);
         var preferred = new List<RoomDefinition>();
@@ -301,6 +292,65 @@ public class DungeonGenerator : MonoBehaviour
             return null;
 
         return pool[Random.Range(0, pool.Count)];
+    }
+
+    void ApplyDepthSpawnScaling()
+    {
+        if (!scaleSpawnCountByDepth || extraEnemiesPerDepth <= 0)
+            return;
+
+        Dictionary<RoomDefinition, int> depthByRoom = BuildRoomDepthMap();
+        for (int i = 0; i < placedRooms.Count; i++)
+        {
+            RoomDefinition room = placedRooms[i];
+            if (room == null)
+                continue;
+
+            RoomEncounter encounter = GetEncounter(room);
+            if (encounter == null)
+                continue;
+
+            if (!depthByRoom.TryGetValue(room, out int depth) || depth <= 0)
+                continue;
+
+            int scaled = encounter.SpawnCount + depth * extraEnemiesPerDepth;
+            if (maxSpawnCount > 0)
+                scaled = Mathf.Min(scaled, maxSpawnCount);
+
+            encounter.SetSpawnCount(scaled);
+        }
+    }
+
+    Dictionary<RoomDefinition, int> BuildRoomDepthMap()
+    {
+        var depthByRoom = new Dictionary<RoomDefinition, int>(placedRooms.Count);
+        if (placedRooms.Count == 0)
+            return depthByRoom;
+
+        var queue = new Queue<RoomDefinition>();
+        RoomDefinition start = placedRooms[0];
+        depthByRoom[start] = 0;
+        queue.Enqueue(start);
+
+        while (queue.Count > 0)
+        {
+            RoomDefinition current = queue.Dequeue();
+            int depth = depthByRoom[current];
+            foreach (RoomSocket socket in current.Sockets)
+            {
+                if (socket == null || !socket.IsConnected || socket.Connected == null)
+                    continue;
+
+                RoomDefinition neighbor = socket.Connected.Room;
+                if (neighbor == null || depthByRoom.ContainsKey(neighbor))
+                    continue;
+
+                depthByRoom[neighbor] = depth + 1;
+                queue.Enqueue(neighbor);
+            }
+        }
+
+        return depthByRoom;
     }
 
     static RoomEncounter GetEncounter(RoomDefinition room)
