@@ -1183,7 +1183,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RepairEnemyAI
   player: {fileID: 0}
   pathRefreshInterval: 0.2
-  maxHealth: 5
+  maxHealth: 6
   contactDamage: 1
   attackRange: 3.5
   attackInterval: 1

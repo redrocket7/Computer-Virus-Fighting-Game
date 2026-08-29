@@ -45,6 +45,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DeathEffect
   duration: 0.8
-  maxBurstRadius: 3
+  maxBurstRadius: 3.5
   brightColor: {r: 0.35, g: 0.95, b: 1, a: 0.75}
   deepColor: {r: 0.75, g: 0.2, b: 1, a: 0.45}

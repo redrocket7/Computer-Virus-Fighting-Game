@@ -781,7 +781,7 @@ NavMeshAgent:
   m_Speed: 3
   m_Acceleration: 8
   avoidancePriority: 50
-  m_AngularSpeed: 60
+  m_AngularSpeed: 150
   m_StoppingDistance: 0
   m_AutoTraverseOffMeshLink: 1
   m_AutoBraking: 1
@@ -853,7 +853,7 @@ MonoBehaviour:
   stepDelay: 0
   nextStepAtProgress: 0.4
   stanceRotationSpeed: 4
-  lookAheadTime: 0.75
+  lookAheadTime: 0.65
   lookAheadMinSpeed: 0.15
   bodyMesh: {fileID: 0}
   tiltSmoothing: 6
@@ -885,8 +885,8 @@ MonoBehaviour:
     m_Bits: 4294967295
   windupDuration: 0.75
   windupScaleMultiplier: 1.2
-  ramSpeed: 22
-  ramDuration: 1
+  ramSpeed: 26
+  ramDuration: 1.3
   ramDamage: 2
   ramHitRange: 2.4
   ramStopDistance: 0.75

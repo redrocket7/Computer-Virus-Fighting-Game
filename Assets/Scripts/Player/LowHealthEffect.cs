@@ -20,7 +20,7 @@ public class LowHealthEffect : MonoBehaviour
     [SerializeField] Color criticalColor = Color.black;
 
     [Header("Glitch")]
-    [SerializeField] float maxGlitchIntensity = 0.85f;
+    [SerializeField] float maxGlitchIntensity = 0.7f;
     [SerializeField] float maxChromaticIntensity = 0.65f;
     [SerializeField] float maxFilmGrainIntensity = 0.55f;
     [Tooltip("How often glitch bursts try to fire at full damage (per second).")]

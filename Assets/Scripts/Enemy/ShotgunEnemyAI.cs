@@ -33,8 +33,6 @@ public class ShotgunEnemyAI : EnemyAI
     [Header("Death Split")]
     [SerializeField] GameObject tinyEnemyPrefab;
     [SerializeField] float tinySpawnRadius = 2.5f;
-    [SerializeField] int minimumTinies = 3;
-    [SerializeField] int maximumTinies = 4;
 
     float fireTimer;
     float repathTimer;
@@ -195,9 +193,7 @@ public class ShotgunEnemyAI : EnemyAI
         if (!hasSplit)
         {
             hasSplit = true;
-            int minTinies = Mathf.Max(1, minimumTinies);
-            int maxTinies = Mathf.Max(minTinies, maximumTinies);
-            SpawnDeathRing(Random.Range(minTinies, maxTinies + 1));
+            SpawnDeathRing(ChooseSpawnCount());
         }
 
         base.Die();
@@ -228,6 +224,16 @@ public class ShotgunEnemyAI : EnemyAI
             if (child != null && boundEncounter != null)
                 boundEncounter.RegisterEnemy(child);
         }
+    }
+
+    static int ChooseSpawnCount()
+    {
+        float roll = Random.value;
+        if (roll < 0.2f)
+            return 2;
+        if (roll < 0.8f)
+            return 3;
+        return 4;
     }
 
 #if UNITY_EDITOR

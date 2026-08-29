@@ -1394,10 +1394,11 @@ MonoBehaviour:
   stepDelay: 0
   nextStepAtProgress: 0.25
   stanceRotationSpeed: 4
-  lookAheadTime: 0.75
+  lookAheadTime: 0.65
   lookAheadMinSpeed: 0.15
   bodyMesh: {fileID: 0}
   tiltSmoothing: 6
+  tiltUpdateInterval: 0.1
 --- !u!114 &2525807994708376942
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1417,6 +1418,7 @@ MonoBehaviour:
   attackRange: 3.5
   attackInterval: 1
   deathEffectPrefab: {fileID: 512345678901234501, guid: b70891a2b3c4d5e6f708901a2b3c4d50, type: 3}
+  deathEffectHeight: 0.35
 --- !u!65 &1971047763653973581
 BoxCollider:
   m_ObjectHideFlags: 0

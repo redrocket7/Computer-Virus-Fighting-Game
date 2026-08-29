@@ -136,7 +136,7 @@ MonoBehaviour:
   explodeOnHit: 1
   explosionPrefab: {fileID: 459251097015774743, guid: e4ddbc5d8b85bad4780c43e1f36ce8a0, type: 3}
   explosionRadius: 4
-  explosionDamage: 2
+  explosionDamage: 1
   shakeDuration: 0.3
   shakeStrength: 0.4
   shakeRotation: 2

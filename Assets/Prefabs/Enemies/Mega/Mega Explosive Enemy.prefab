@@ -787,13 +787,13 @@ MonoBehaviour:
   deathDamageMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  countdownShakeStrength: 0.01
-  countdownShakeRotation: 0.1
+  countdownShakeStrength: 0.02
+  countdownShakeRotation: 0.2
   countdownShakeStrengthMax: 0.2
-  countdownShakeRotationMax: 1
-  deathShakeDuration: 0.55
-  deathShakeStrength: 0.7
-  deathShakeRotation: 4
+  countdownShakeRotationMax: 1.5
+  deathShakeDuration: 0.7
+  deathShakeStrength: 0.9
+  deathShakeRotation: 4.5
 --- !u!65 &7806898481211741642
 BoxCollider:
   m_ObjectHideFlags: 0

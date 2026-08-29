@@ -533,14 +533,14 @@ MonoBehaviour:
   shieldSpawnChance: 0.15
   shieldHealth: 5
   megaEnemyPrefabs:
-  - {fileID: 1771518582702127463, guid: 31a9c2507c598854cbf76de1b6dace4f, type: 3}
   - {fileID: 1771518582702127463, guid: 5ed879bcaf07bcd49b9c237c1a57d957, type: 3}
+  - {fileID: 1771518582702127463, guid: 31a9c2507c598854cbf76de1b6dace4f, type: 3}
   megaEnemySpawnChance: 1
   excludeStartRoomForMega: 1
   megaPreferredMaxDepth: 5
   targetRoomCount: 15
   maxPlacementAttempts: 2000
-  overlapPadding: 2
+  overlapPadding: 3
   seed: 0
   minimumPassageChunks: 20
   maximumPassageChunks: 120
@@ -548,12 +548,16 @@ MonoBehaviour:
   minimumStraightsAtDoors: 20
   minimumStraightsBetweenTurns: 20
   passageOverlapPadding: 0.1
+  scaleSpawnCountByDepth: 1
+  extraEnemiesPerDepth: 1
+  maxSpawnCount: 0
   smallAgentTypeId: 0
   fatAgentTypeId: -1372625422
   groundMask:
     serializedVersion: 2
     m_Bits: 8
   player: {fileID: 1288065130}
+  enableFogCover: 1
   fogCoverMaterial: {fileID: 2100000, guid: 80ff4075a157b754c9f065444bfbb63e, type: 2}
   fogCoverColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
   fogOverrideMaterialColor: 1
