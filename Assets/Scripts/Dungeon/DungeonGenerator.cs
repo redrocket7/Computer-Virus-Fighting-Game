@@ -74,6 +74,25 @@ public class DungeonGenerator : MonoBehaviour
     [Tooltip("Hard cap on spawn count after depth scaling. 0 = no cap.")]
     [SerializeField] int maxSpawnCount = 0;
 
+    [Header("Room Modifiers")]
+    [Range(0f, 1f)]
+    [Tooltip("Chance each combat room becomes a RAID Array (guaranteed Repair or Overclock).")]
+    [SerializeField] float raidArrayChance = 0.25f;
+    [Range(0f, 1f)]
+    [Tooltip("Chance each combat room becomes a Boot Loop (another enemy wave after the first pack dies).")]
+    [SerializeField] float bootLoopChance = 0.2f;
+    [Min(1)]
+    [Tooltip("How many extra waves spawn after the first clear in a Boot Loop room.")]
+    [SerializeField] int bootLoopExtraWaves = 1;
+    [Min(0f)]
+    [Tooltip("Delay after a Boot Loop wave is cleared before the next wave spawns.")]
+    [SerializeField] float bootLoopSpawnDelay = 1.5f;
+    [Min(0f)]
+    [Tooltip("Combat holdoff for enemies spawned by a Boot Loop reinforcement wave.")]
+    [SerializeField] float bootLoopAttackDelay = 1.25f;
+    [Tooltip("When enabled, the start room never rolls a room modifier.")]
+    [SerializeField] bool excludeStartRoomForModifiers = true;
+
     [Header("Navigation")]
     [SerializeField] int smallAgentTypeId = 0;
     [SerializeField] int fatAgentTypeId = -1372625422;
@@ -140,6 +159,7 @@ public class DungeonGenerator : MonoBehaviour
 
         SealUnusedExits();
         ApplyDepthSpawnScaling();
+        AssignRoomModifiers();
         AssignMegaEnemy();
         BuildNavigation();
         PlacePlayer(start);
@@ -319,6 +339,84 @@ public class DungeonGenerator : MonoBehaviour
 
             encounter.SetSpawnCount(scaled);
         }
+    }
+
+    void AssignRoomModifiers()
+    {
+        float raidChance = Mathf.Clamp01(raidArrayChance);
+        float loopChance = Mathf.Clamp01(bootLoopChance);
+        if (raidChance <= 0f && loopChance <= 0f)
+            return;
+
+        bool hasSupports = EnemyPoolHasSupportPrefab();
+        RoomDefinition start = placedRooms.Count > 0 ? placedRooms[0] : null;
+        var candidates = new List<RoomModifierType>(2);
+
+        for (int i = 0; i < placedRooms.Count; i++)
+        {
+            RoomDefinition room = placedRooms[i];
+            if (room == null)
+                continue;
+
+            if (excludeStartRoomForModifiers && room == start)
+                continue;
+
+            RoomEncounter encounter = GetEncounter(room);
+            if (encounter == null || !encounter.enabled)
+                continue;
+
+            if (encounter.RoomModifier != RoomModifierType.None)
+                continue;
+
+            candidates.Clear();
+            if (raidChance > 0f && Random.value <= raidChance)
+            {
+                if (hasSupports)
+                    candidates.Add(RoomModifierType.RaidArray);
+            }
+
+            if (loopChance > 0f && Random.value <= loopChance)
+                candidates.Add(RoomModifierType.BootLoop);
+
+            if (candidates.Count == 0)
+                continue;
+
+            RoomModifierType chosen = candidates[Random.Range(0, candidates.Count)];
+            encounter.SetRoomModifier(chosen);
+            if (chosen == RoomModifierType.BootLoop)
+            {
+                encounter.SetBootLoopExtraWaves(bootLoopExtraWaves);
+                encounter.SetBootLoopTiming(bootLoopSpawnDelay, bootLoopAttackDelay);
+            }
+
+            Debug.Log($"{chosen} assigned to room '{room.name}'.", room);
+        }
+
+        if (raidChance > 0f && !hasSupports)
+        {
+            Debug.LogWarning(
+                "RAID Array rolls skipped: enemy prefab pool has no Repair/Overclock supports.",
+                this);
+        }
+    }
+
+    bool EnemyPoolHasSupportPrefab()
+    {
+        if (enemyPrefabs == null)
+            return false;
+
+        for (int i = 0; i < enemyPrefabs.Length; i++)
+        {
+            GameObject prefab = enemyPrefabs[i];
+            if (prefab == null)
+                continue;
+
+            EnemyAI ai = prefab.GetComponent<EnemyAI>() ?? prefab.GetComponentInChildren<EnemyAI>();
+            if (ai != null && ai.IsSupportEnemy)
+                return true;
+        }
+
+        return false;
     }
 
     Dictionary<RoomDefinition, int> BuildRoomDepthMap()
@@ -602,6 +700,9 @@ public class DungeonGenerator : MonoBehaviour
         encounter?.SetBuffEnemyLimits(maxOverclockPerRoom, maxRepairPerRoom);
         encounter?.SetShieldSpawnSettings(shieldSpawnChance, shieldHealth);
         encounter?.SetBonusMegaEnemy(null);
+        encounter?.SetRoomModifier(RoomModifierType.None);
+        encounter?.SetBootLoopExtraWaves(0);
+        encounter?.SetBootLoopTiming(1.5f, 1.25f);
     }
 
     bool PassageOverlapsDungeon(

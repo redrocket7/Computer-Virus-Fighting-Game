@@ -100,7 +100,10 @@ public class RepairEnemyAI : EnemyAI
             float before = ally.CurrentHealth;
             ally.Heal(amount);
             if (ally.CurrentHealth > before)
+            {
                 healedAny = true;
+                RepairBuffVisual.Refresh(ally);
+            }
         }
 
         if (healedAny && healEffect != null && !healEffect.isPlaying)

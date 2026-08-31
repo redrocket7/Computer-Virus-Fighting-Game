@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 7071896024176435863}
   - component: {fileID: -7140362014745044277}
   m_Layer: 0
-  m_Name: Bomb Enemy Explosion 1
+  m_Name: Zip Bomb Enemy Explosion
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -44,9 +44,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a3f8e2c1d4b56a7091e8f4d2c3b5a697, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExplosionEffect
-  duration: 1.5
-  maxOrbRadius: 0.1
-  maxRingRadius: 7
+  duration: 0.85
+  maxOrbRadius: 8
+  maxRingRadius: 10.5
   brightColor: {r: 1, g: 0.92, b: 0.35, a: 0.82}
   deepColor: {r: 1, g: 0.42, b: 0.05, a: 0.55}
   ringColor: {r: 0.22, g: 0.22, b: 0.22, a: 0.55}

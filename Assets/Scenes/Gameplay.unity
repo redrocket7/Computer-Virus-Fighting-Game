@@ -527,6 +527,8 @@ MonoBehaviour:
   - {fileID: 1771518582702127463, guid: 7ae39ef1c059973498f4f3c84d2e6b58, type: 3}
   - {fileID: 1771518582702127463, guid: 0457432f860499c44b18bf9313a77e47, type: 3}
   - {fileID: 1771518582702127463, guid: 20079befd404c3d43adc89d826969b0d, type: 3}
+  - {fileID: 1771518582702127463, guid: fe962da04332ef94ab34936a9fed5620, type: 3}
+  - {fileID: 1771518582702127463, guid: 5b948bfc0488c4d42b1cd126361125b1, type: 3}
   enemyAttackDelay: 0.5
   maxOverclockPerRoom: 1
   maxRepairPerRoom: 1
@@ -551,6 +553,12 @@ MonoBehaviour:
   scaleSpawnCountByDepth: 1
   extraEnemiesPerDepth: 1
   maxSpawnCount: 0
+  raidArrayChance: 0.25
+  bootLoopChance: 0.2
+  bootLoopExtraWaves: 1
+  bootLoopSpawnDelay: 2
+  bootLoopAttackDelay: 0.75
+  excludeStartRoomForModifiers: 1
   smallAgentTypeId: 0
   fatAgentTypeId: -1372625422
   groundMask:

@@ -1,6 +1,16 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+
+public enum RoomModifierType
+{
+    None = 0,
+    /// <summary>Guarantees an extra Repair or Overclock support in the room.</summary>
+    RaidArray = 1,
+    /// <summary>When the current pack dies, another wave of enemies spawns.</summary>
+    BootLoop = 2
+}
 
 /// <summary>
 /// One-time Gungeon-style encounter: lock doors, spawn enemies, unlock when all are dead.
@@ -38,9 +48,15 @@ public class RoomEncounter : MonoBehaviour
     [SerializeField] float shieldHealth = 4f;
 
     GameObject bonusMegaPrefab;
+    RoomModifierType roomModifier = RoomModifierType.None;
+    int bootLoopWavesRemaining;
+    float bootLoopSpawnDelay = 1.5f;
+    float bootLoopAttackDelay = 1.25f;
+    bool bootLoopWavePending;
 
     RoomDefinition room;
     readonly HashSet<EnemyAI> livingEnemies = new HashSet<EnemyAI>();
+    readonly List<BootLoopSpawnMarker> activeSpawnMarkers = new List<BootLoopSpawnMarker>();
     bool started;
     bool cleared;
 
@@ -48,6 +64,7 @@ public class RoomEncounter : MonoBehaviour
     public bool IsInProgress => started && !cleared;
     public bool IsRevealed => cleared || !enabled;
     public int LivingEnemyCount => livingEnemies.Count;
+    public RoomModifierType RoomModifier => roomModifier;
     public event System.Action Started;
     public event System.Action Cleared;
 
@@ -95,9 +112,32 @@ public class RoomEncounter : MonoBehaviour
         bonusMegaPrefab = prefab;
     }
 
+    public void SetRoomModifier(RoomModifierType modifier)
+    {
+        roomModifier = modifier;
+        if (modifier != RoomModifierType.BootLoop)
+            bootLoopWavesRemaining = 0;
+    }
+
+    public void SetBootLoopExtraWaves(int extraWaves)
+    {
+        bootLoopWavesRemaining = Mathf.Max(0, extraWaves);
+    }
+
+    public void SetBootLoopTiming(float spawnDelay, float attackDelay)
+    {
+        bootLoopSpawnDelay = Mathf.Max(0f, spawnDelay);
+        bootLoopAttackDelay = Mathf.Max(0f, attackDelay);
+    }
+
     void Awake()
     {
         room = GetComponent<RoomDefinition>();
+    }
+
+    void OnDestroy()
+    {
+        ClearSpawnMarkers();
     }
 
     void OnTriggerEnter(Collider other)
@@ -121,7 +161,7 @@ public class RoomEncounter : MonoBehaviour
             room = GetComponent<RoomDefinition>();
 
         SetDoorsLocked(true);
-        SpawnEnemies();
+        SpawnWave(includeBonuses: true, holdoffOverride: -1f);
 
         if (livingEnemies.Count == 0)
             CompleteEncounter();
@@ -144,33 +184,101 @@ public class RoomEncounter : MonoBehaviour
             return;
 
         livingEnemies.Remove(enemy);
-        if (started && livingEnemies.Count == 0)
-            CompleteEncounter();
+        if (!started || cleared || livingEnemies.Count > 0 || bootLoopWavePending)
+            return;
+
+        if (TryBeginBootLoopWave())
+            return;
+
+        CompleteEncounter();
     }
 
-    void SpawnEnemies()
+    bool TryBeginBootLoopWave()
     {
+        if (roomModifier != RoomModifierType.BootLoop || bootLoopWavesRemaining <= 0)
+            return false;
+
+        bootLoopWavesRemaining--;
+        bootLoopWavePending = true;
+        StartCoroutine(SpawnBootLoopWaveRoutine());
+        return true;
+    }
+
+    IEnumerator SpawnBootLoopWaveRoutine()
+    {
+        List<PlannedSpawn> planned = PlanWaveSpawns(includeBonuses: false);
+        if (planned.Count == 0)
+        {
+            bootLoopWavePending = false;
+            Debug.LogWarning(
+                $"Boot Loop room '{room.name}' failed to plan a reinforcement wave.",
+                this);
+            CompleteEncounter();
+            yield break;
+        }
+
+        ShowSpawnMarkers(planned);
+
+        float delay = bootLoopSpawnDelay;
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        ClearSpawnMarkers();
+        SpawnPlannedWave(planned, bootLoopAttackDelay);
+        bootLoopWavePending = false;
+
+        if (livingEnemies.Count == 0)
+        {
+            Debug.LogWarning(
+                $"Boot Loop room '{room.name}' failed to spawn a reinforcement wave.",
+                this);
+            CompleteEncounter();
+        }
+    }
+
+    struct PlannedSpawn
+    {
+        public GameObject Prefab;
+        public Vector3 Position;
+        public float MarkerRadius;
+    }
+
+    List<PlannedSpawn> PlanWaveSpawns(bool includeBonuses)
+    {
+        var planned = new List<PlannedSpawn>();
         if (room == null)
-            return;
+            return planned;
 
         bool hasNormalPool = enemyPrefabs != null && enemyPrefabs.Length > 0 && spawnCount > 0;
-        bool hasMega = bonusMegaPrefab != null;
-        if (!hasNormalPool && !hasMega)
-            return;
+        bool hasMega = includeBonuses && bonusMegaPrefab != null;
+        bool hasRaidSupport = includeBonuses &&
+                              roomModifier == RoomModifierType.RaidArray &&
+                              enemyPrefabs != null &&
+                              enemyPrefabs.Length > 0;
+        if (!hasNormalPool && !hasMega && !hasRaidSupport)
+            return planned;
 
-        var occupiedPositions = new List<Vector3>(spawnCount + (hasMega ? 1 : 0));
+        var occupiedPositions = new List<Vector3>(spawnCount + (hasMega ? 1 : 0) + 1);
         var eligiblePrefabs = new List<GameObject>(hasNormalPool ? enemyPrefabs.Length : 0);
         PlayerController player = PlayerController.Instance != null
             ? PlayerController.Instance
             : FindAnyObjectByType<PlayerController>();
+        Transform playerTransform = player != null ? player.transform : null;
         int spawnedOverclock = 0;
         int spawnedRepair = 0;
 
         if (hasMega)
-            TrySpawnEnemy(bonusMegaPrefab, occupiedPositions, player, ref spawnedOverclock, ref spawnedRepair);
+            TryPlanSpawn(bonusMegaPrefab, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair);
+
+        if (hasRaidSupport)
+        {
+            GameObject support = ChooseRaidSupportPrefab(spawnedOverclock, spawnedRepair);
+            if (support != null)
+                TryPlanSpawn(support, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair);
+        }
 
         if (!hasNormalPool)
-            return;
+            return planned;
 
         for (int i = 0; i < spawnCount; i++)
         {
@@ -181,25 +289,24 @@ public class RoomEncounter : MonoBehaviour
             if (prefab == null)
                 continue;
 
-            TrySpawnEnemy(prefab, occupiedPositions, player, ref spawnedOverclock, ref spawnedRepair);
+            TryPlanSpawn(prefab, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair);
         }
+
+        return planned;
     }
 
-    void TrySpawnEnemy(
+    void TryPlanSpawn(
         GameObject prefab,
         List<Vector3> occupiedPositions,
-        PlayerController player,
+        Transform player,
+        List<PlannedSpawn> planned,
         ref int spawnedOverclock,
         ref int spawnedRepair)
     {
         if (prefab == null)
             return;
 
-        if (!TryChooseRandomSpawnPosition(
-                prefab,
-                occupiedPositions,
-                player != null ? player.transform : null,
-                out Vector3 spawnPosition))
+        if (!TryChooseRandomSpawnPosition(prefab, occupiedPositions, player, out Vector3 spawnPosition))
         {
             Debug.LogWarning(
                 $"Could not find a valid NavMesh spawn point for {prefab.name} in {room.name}.",
@@ -207,15 +314,98 @@ public class RoomEncounter : MonoBehaviour
             return;
         }
 
-        GameObject instance = Instantiate(prefab, spawnPosition, Quaternion.identity);
-        EnemyAI ai = instance.GetComponent<EnemyAI>() ?? instance.GetComponentInChildren<EnemyAI>();
-        RegisterEnemy(ai);
-        if (ai != null && attackDelay > 0f)
-            ai.SetCombatHoldoff(attackDelay);
-        TryGrantRandomShield(ai);
         occupiedPositions.Add(spawnPosition);
+        CountBuffSpawn(GetPrefabAi(prefab), ref spawnedOverclock, ref spawnedRepair);
+        planned.Add(new PlannedSpawn
+        {
+            Prefab = prefab,
+            Position = spawnPosition,
+            MarkerRadius = EstimateMarkerRadius(prefab)
+        });
+    }
 
-        CountBuffSpawn(ai ?? GetPrefabAi(prefab), ref spawnedOverclock, ref spawnedRepair);
+    static float EstimateMarkerRadius(GameObject prefab)
+    {
+        NavMeshAgent agent =
+            prefab.GetComponent<NavMeshAgent>() ??
+            prefab.GetComponentInChildren<NavMeshAgent>();
+        if (agent != null && agent.radius > 0.1f)
+            return Mathf.Clamp(agent.radius * 1.35f, 0.75f, 2.2f);
+        return 1.1f;
+    }
+
+    void ShowSpawnMarkers(List<PlannedSpawn> planned)
+    {
+        ClearSpawnMarkers();
+        for (int i = 0; i < planned.Count; i++)
+        {
+            PlannedSpawn spawn = planned[i];
+            BootLoopSpawnMarker marker = BootLoopSpawnMarker.Create(spawn.Position, spawn.MarkerRadius);
+            activeSpawnMarkers.Add(marker);
+        }
+    }
+
+    void ClearSpawnMarkers()
+    {
+        for (int i = 0; i < activeSpawnMarkers.Count; i++)
+        {
+            if (activeSpawnMarkers[i] != null)
+                Destroy(activeSpawnMarkers[i].gameObject);
+        }
+
+        activeSpawnMarkers.Clear();
+    }
+
+    void SpawnPlannedWave(List<PlannedSpawn> planned, float holdoff)
+    {
+        for (int i = 0; i < planned.Count; i++)
+        {
+            PlannedSpawn spawn = planned[i];
+            if (spawn.Prefab == null)
+                continue;
+
+            GameObject instance = Instantiate(spawn.Prefab, spawn.Position, Quaternion.identity);
+            EnemyAI ai = instance.GetComponent<EnemyAI>() ?? instance.GetComponentInChildren<EnemyAI>();
+            RegisterEnemy(ai);
+            if (ai != null && holdoff > 0f)
+                ai.SetCombatHoldoff(holdoff);
+            TryGrantRandomShield(ai);
+        }
+    }
+
+    void SpawnWave(bool includeBonuses, float holdoffOverride)
+    {
+        List<PlannedSpawn> planned = PlanWaveSpawns(includeBonuses);
+        float holdoff = holdoffOverride >= 0f ? holdoffOverride : attackDelay;
+        SpawnPlannedWave(planned, holdoff);
+    }
+
+    GameObject ChooseRaidSupportPrefab(int spawnedOverclock, int spawnedRepair)
+    {
+        if (enemyPrefabs == null || enemyPrefabs.Length == 0)
+            return null;
+
+        var supports = new List<GameObject>(4);
+        for (int i = 0; i < enemyPrefabs.Length; i++)
+        {
+            GameObject prefab = enemyPrefabs[i];
+            if (prefab == null)
+                continue;
+
+            EnemyAI ai = GetPrefabAi(prefab);
+            if (ai == null || !ai.IsSupportEnemy)
+                continue;
+
+            if (!CanSpawnBuffPrefab(prefab, spawnedOverclock, spawnedRepair))
+                continue;
+
+            supports.Add(prefab);
+        }
+
+        if (supports.Count == 0)
+            return null;
+
+        return supports[Random.Range(0, supports.Count)];
     }
 
     void TryGrantRandomShield(EnemyAI ai)
@@ -370,6 +560,8 @@ public class RoomEncounter : MonoBehaviour
             return;
 
         cleared = true;
+        bootLoopWavePending = false;
+        ClearSpawnMarkers();
         SetDoorsLocked(false);
         Cleared?.Invoke();
     }
