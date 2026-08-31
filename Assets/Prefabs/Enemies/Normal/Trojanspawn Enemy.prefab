@@ -678,6 +678,7 @@ MonoBehaviour:
   lookAheadMinSpeed: 0.15
   bodyMesh: {fileID: 0}
   tiltSmoothing: 6
+  tiltUpdateInterval: 0.1
 --- !u!114 &2525807994708376942
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -697,6 +698,7 @@ MonoBehaviour:
   attackRange: 2
   attackInterval: 1
   deathEffectPrefab: {fileID: 512345678901234501, guid: b70891a2b3c4d5e6f708901a2b3c4d50, type: 3}
+  deathEffectHeight: 0.35
   tinyEnemyPrefab: {fileID: 1771518582702127463, guid: b15bcfbe3c7ddb74687c9f5744e561e3, type: 3}
   spawnRadius: 1.5
 --- !u!65 &7806898481211741642

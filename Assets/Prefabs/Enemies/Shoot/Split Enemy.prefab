@@ -982,7 +982,7 @@ MonoBehaviour:
   pathRefreshInterval: 0.2
   maxHealth: 5
   contactDamage: 1
-  attackRange: 3.5
+  attackRange: 3
   attackInterval: 2.5
   deathEffectPrefab: {fileID: 512345678901234501, guid: b70891a2b3c4d5e6f708901a2b3c4d50, type: 3}
   deathEffectHeight: 0.35

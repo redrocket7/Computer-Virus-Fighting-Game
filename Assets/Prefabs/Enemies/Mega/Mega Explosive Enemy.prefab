@@ -757,7 +757,7 @@ MonoBehaviour:
   pathRefreshInterval: 0.2
   maxHealth: 35
   contactDamage: 2
-  attackRange: 3
+  attackRange: 3.5
   attackInterval: 1.5
   deathEffectPrefab: {fileID: 0}
   deathEffectHeight: 0.35
@@ -769,7 +769,7 @@ MonoBehaviour:
   firePoint: {fileID: 1772016693028365004}
   projectileHeight: 3.5
   minFireRange: 7
-  maxFireRange: 26
+  maxFireRange: 28
   shellsPerBurst: 3
   shellInterval: 0.6
   burstInterval: 3.2

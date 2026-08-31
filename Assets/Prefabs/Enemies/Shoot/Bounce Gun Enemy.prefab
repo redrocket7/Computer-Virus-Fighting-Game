@@ -588,7 +588,7 @@ MonoBehaviour:
   pathRefreshInterval: 0.2
   maxHealth: 4
   contactDamage: 1
-  attackRange: 2
+  attackRange: 3
   attackInterval: 1
   deathEffectPrefab: {fileID: 512345678901234501, guid: b70891a2b3c4d5e6f708901a2b3c4d50, type: 3}
   deathEffectHeight: 0.35
@@ -607,7 +607,7 @@ MonoBehaviour:
   recoilDistance: 0.7
   recoilRecoverTime: 0.2
   detectRange: 18
-  threatRadius: 2.4
+  threatRadius: 2.5
   dodgeDistance: 8
   dodgeDuration: 1.25
   dodgeCooldown: 0.4
