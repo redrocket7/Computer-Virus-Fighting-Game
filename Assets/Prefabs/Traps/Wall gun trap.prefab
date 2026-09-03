@@ -9,8 +9,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6498010863864404840}
+  - component: {fileID: 5847293016458928371}
   m_Layer: 0
-  m_Name: Gunner Trap
+  m_Name: Wall gun trap
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -34,6 +35,24 @@ Transform:
   - {fileID: 876959281157743299}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5847293016458928371
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1669413911818276018}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1c2d3e4f5a6789012345678abcdef02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WallGunTrap
+  projectilePrefab: {fileID: 1218547052986349569, guid: 1097ae28fa295ad4e8842087cc162315, type: 3}
+  firePoint: {fileID: 876959281157743299}
+  fireInterval: 1.25
+  firstShotDelay: 0.35
+  localFireDirection: {x: 0, y: -1, z: 0}
+  waitForRoomEncounter: 1
 --- !u!1 &2825690666048693624
 GameObject:
   m_ObjectHideFlags: 0
@@ -63,7 +82,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 2, y: 2.5, z: 0.5}
+  m_LocalScale: {x: 3, y: 2.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 6498010863864404840}

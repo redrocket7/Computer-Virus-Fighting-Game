@@ -165,6 +165,12 @@ public class Projectile : MonoBehaviour
             if (!firedByEnemy && damageable is PlayerController)
                 return;
 
+            if (!firedByEnemy && PacketLossCombatEffect.ShouldFizzlePlayerShot())
+            {
+                FizzleFromPacketLoss();
+                return;
+            }
+
             if (explodeOnHit)
             {
                 Explode(transform.position);
@@ -189,6 +195,12 @@ public class Projectile : MonoBehaviour
             Explode(transform.position);
         else
             Destroy(gameObject);
+    }
+
+    void FizzleFromPacketLoss()
+    {
+        PacketLossFizzleEffect.Play(transform.position, direction);
+        Destroy(gameObject);
     }
 
     void Explode(Vector3 position)

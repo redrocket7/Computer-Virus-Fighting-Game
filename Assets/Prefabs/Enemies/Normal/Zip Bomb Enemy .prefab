@@ -599,7 +599,7 @@ MonoBehaviour:
   explosionShakeStrength: 0.65
   explosionShakeRotation: 3.5
   bodyMesh: {fileID: 5071466340973957121}
-  maxBodyScale: {x: 2, y: 1.7, z: 2}
+  maxBodyScale: {x: 2.4, y: 1.8, z: 2.4}
   maxBodyLift: 1
 --- !u!65 &7806898481211741642
 BoxCollider:

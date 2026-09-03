@@ -22,6 +22,9 @@ public class DungeonGenerator : MonoBehaviour
     [Min(0)]
     [Tooltip("Max Repair enemies that can spawn in one room. 0 = none.")]
     [SerializeField] int maxRepairPerRoom = 1;
+    [Min(0)]
+    [Tooltip("Max Shielder enemies that can spawn in one room. 0 = none.")]
+    [SerializeField] int maxShielderPerRoom = 1;
 
     [Header("Random Shields")]
     [Range(0f, 1f)]
@@ -90,8 +93,25 @@ public class DungeonGenerator : MonoBehaviour
     [Min(0f)]
     [Tooltip("Combat holdoff for enemies spawned by a Boot Loop reinforcement wave.")]
     [SerializeField] float bootLoopAttackDelay = 1.25f;
+    [Range(0f, 1f)]
+    [Tooltip("Chance each combat room becomes Packet Loss (player shots may fizzle).")]
+    [SerializeField] float packetLossChance = 0.2f;
+    [Range(0f, 1f)]
+    [Tooltip("Chance each player shot fizzles in a Packet Loss room.")]
+    [SerializeField] float packetLossFizzleChance = 0.35f;
     [Tooltip("When enabled, the start room never rolls a room modifier.")]
     [SerializeField] bool excludeStartRoomForModifiers = true;
+
+    [Header("Health Pickups")]
+    [SerializeField] GameObject healthPickupPrefab;
+    [Range(0f, 1f)]
+    [Tooltip("Chance each combat room drops a health pickup when cleared.")]
+    [SerializeField] float healthPickupDropChance = 0.25f;
+    [SerializeField] float healthPickupHealAmount = 1f;
+    [SerializeField] bool excludeStartRoomForHealthPickup = true;
+    [SerializeField] float healthPickupMinCenterDistance = 14f;
+    [SerializeField] float healthPickupSampleRadius = 3f;
+    [SerializeField] int healthPickupSpawnAttempts = 48;
 
     [Header("Navigation")]
     [SerializeField] int smallAgentTypeId = 0;
@@ -162,6 +182,7 @@ public class DungeonGenerator : MonoBehaviour
         AssignRoomModifiers();
         AssignMegaEnemy();
         BuildNavigation();
+        AssignHealthPickups();
         PlacePlayer(start);
         if (enableFogCover)
             EnsureRoomFogCovers();
@@ -345,12 +366,13 @@ public class DungeonGenerator : MonoBehaviour
     {
         float raidChance = Mathf.Clamp01(raidArrayChance);
         float loopChance = Mathf.Clamp01(bootLoopChance);
-        if (raidChance <= 0f && loopChance <= 0f)
+        float packetChance = Mathf.Clamp01(packetLossChance);
+        if (raidChance <= 0f && loopChance <= 0f && packetChance <= 0f)
             return;
 
         bool hasSupports = EnemyPoolHasSupportPrefab();
         RoomDefinition start = placedRooms.Count > 0 ? placedRooms[0] : null;
-        var candidates = new List<RoomModifierType>(2);
+        var candidates = new List<RoomModifierType>(3);
 
         for (int i = 0; i < placedRooms.Count; i++)
         {
@@ -378,6 +400,9 @@ public class DungeonGenerator : MonoBehaviour
             if (loopChance > 0f && Random.value <= loopChance)
                 candidates.Add(RoomModifierType.BootLoop);
 
+            if (packetChance > 0f && Random.value <= packetChance)
+                candidates.Add(RoomModifierType.PacketLoss);
+
             if (candidates.Count == 0)
                 continue;
 
@@ -388,6 +413,10 @@ public class DungeonGenerator : MonoBehaviour
                 encounter.SetBootLoopExtraWaves(bootLoopExtraWaves);
                 encounter.SetBootLoopTiming(bootLoopSpawnDelay, bootLoopAttackDelay);
             }
+            else if (chosen == RoomModifierType.PacketLoss)
+            {
+                encounter.SetPacketLossSettings(packetLossFizzleChance);
+            }
 
             Debug.Log($"{chosen} assigned to room '{room.name}'.", room);
         }
@@ -395,7 +424,7 @@ public class DungeonGenerator : MonoBehaviour
         if (raidChance > 0f && !hasSupports)
         {
             Debug.LogWarning(
-                "RAID Array rolls skipped: enemy prefab pool has no Repair/Overclock supports.",
+                "RAID Array rolls skipped: enemy prefab pool has no Repair/Overclock/Shielder supports.",
                 this);
         }
     }
@@ -697,12 +726,43 @@ public class DungeonGenerator : MonoBehaviour
 
         encounter?.SetEnemyPrefabs(enemyPrefabs);
         encounter?.SetAttackDelay(enemyAttackDelay);
-        encounter?.SetBuffEnemyLimits(maxOverclockPerRoom, maxRepairPerRoom);
+        encounter?.SetBuffEnemyLimits(maxOverclockPerRoom, maxRepairPerRoom, maxShielderPerRoom);
         encounter?.SetShieldSpawnSettings(shieldSpawnChance, shieldHealth);
         encounter?.SetBonusMegaEnemy(null);
         encounter?.SetRoomModifier(RoomModifierType.None);
         encounter?.SetBootLoopExtraWaves(0);
         encounter?.SetBootLoopTiming(1.5f, 1.25f);
+        encounter?.SetPacketLossSettings(0f);
+        encounter?.ClearHealthPickupDrop();
+    }
+
+    void AssignHealthPickups()
+    {
+        if (healthPickupPrefab == null || healthPickupDropChance <= 0f)
+            return;
+
+        for (int i = 0; i < placedRooms.Count; i++)
+        {
+            RoomDefinition room = placedRooms[i];
+            if (room == null)
+                continue;
+
+            if (excludeStartRoomForHealthPickup && i == 0)
+                continue;
+
+            RoomEncounter encounter = room.Encounter;
+            if (encounter == null || !encounter.enabled)
+                continue;
+
+            if (Random.value > healthPickupDropChance)
+                continue;
+
+            encounter.SetHealthPickupSpawnSettings(
+                healthPickupMinCenterDistance,
+                healthPickupSampleRadius,
+                healthPickupSpawnAttempts);
+            encounter.ConfigureHealthPickupDrop(healthPickupPrefab, healthPickupHealAmount);
+        }
     }
 
     bool PassageOverlapsDungeon(

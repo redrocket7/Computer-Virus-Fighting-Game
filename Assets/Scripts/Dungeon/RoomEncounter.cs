@@ -9,7 +9,9 @@ public enum RoomModifierType
     /// <summary>Guarantees an extra Repair or Overclock support in the room.</summary>
     RaidArray = 1,
     /// <summary>When the current pack dies, another wave of enemies spawns.</summary>
-    BootLoop = 2
+    BootLoop = 2,
+    /// <summary>Player shots have a chance to fizzle while the encounter is active.</summary>
+    PacketLoss = 3
 }
 
 /// <summary>
@@ -40,6 +42,9 @@ public class RoomEncounter : MonoBehaviour
     [Min(0)]
     [Tooltip("Max Repair enemies that can spawn in this room. 0 = none.")]
     [SerializeField] int maxRepairPerRoom = 1;
+    [Min(0)]
+    [Tooltip("Max Shielder enemies that can spawn in this room. 0 = none.")]
+    [SerializeField] int maxShielderPerRoom = 1;
 
     [Header("Random Shields")]
     [Range(0f, 1f)]
@@ -47,11 +52,20 @@ public class RoomEncounter : MonoBehaviour
     [SerializeField] float shieldSpawnChance = 0.2f;
     [SerializeField] float shieldHealth = 4f;
 
+    [Header("Health Pickup Drop")]
+    [SerializeField] float healthPickupMinCenterDistance = 14f;
+    [SerializeField] float healthPickupSampleRadius = 3f;
+    [SerializeField] int healthPickupSpawnAttempts = 48;
+
+    GameObject healthPickupPrefab;
+    float healthPickupHealAmount;
+    bool pendingHealthPickupDrop;
     GameObject bonusMegaPrefab;
     RoomModifierType roomModifier = RoomModifierType.None;
     int bootLoopWavesRemaining;
     float bootLoopSpawnDelay = 1.5f;
     float bootLoopAttackDelay = 1.25f;
+    float packetLossFizzleChance;
     bool bootLoopWavePending;
 
     RoomDefinition room;
@@ -88,10 +102,11 @@ public class RoomEncounter : MonoBehaviour
         attackDelay = Mathf.Max(0f, seconds);
     }
 
-    public void SetBuffEnemyLimits(int overclock, int repair)
+    public void SetBuffEnemyLimits(int overclock, int repair, int shielder)
     {
         maxOverclockPerRoom = Mathf.Max(0, overclock);
         maxRepairPerRoom = Mathf.Max(0, repair);
+        maxShielderPerRoom = Mathf.Max(0, shielder);
     }
 
     public void SetShieldSpawnSettings(float chance, float health)
@@ -130,6 +145,35 @@ public class RoomEncounter : MonoBehaviour
         bootLoopAttackDelay = Mathf.Max(0f, attackDelay);
     }
 
+    public void SetPacketLossSettings(float fizzleChance)
+    {
+        packetLossFizzleChance = Mathf.Clamp01(fizzleChance);
+    }
+
+    public void ConfigureHealthPickupDrop(GameObject prefab, float healAmount)
+    {
+        healthPickupPrefab = prefab;
+        healthPickupHealAmount = Mathf.Max(0f, healAmount);
+        pendingHealthPickupDrop = prefab != null && healthPickupHealAmount > 0f;
+    }
+
+    public void SetHealthPickupSpawnSettings(
+        float minCenterDistance,
+        float sampleRadius,
+        int attempts)
+    {
+        healthPickupMinCenterDistance = Mathf.Max(0f, minCenterDistance);
+        healthPickupSampleRadius = Mathf.Max(0.25f, sampleRadius);
+        healthPickupSpawnAttempts = Mathf.Max(1, attempts);
+    }
+
+    public void ClearHealthPickupDrop()
+    {
+        healthPickupPrefab = null;
+        healthPickupHealAmount = 0f;
+        pendingHealthPickupDrop = false;
+    }
+
     void Awake()
     {
         room = GetComponent<RoomDefinition>();
@@ -138,6 +182,7 @@ public class RoomEncounter : MonoBehaviour
     void OnDestroy()
     {
         ClearSpawnMarkers();
+        EndPacketLossEffect();
     }
 
     void OnTriggerEnter(Collider other)
@@ -161,6 +206,7 @@ public class RoomEncounter : MonoBehaviour
             room = GetComponent<RoomDefinition>();
 
         SetDoorsLocked(true);
+        BeginPacketLossEffect();
         SpawnWave(includeBonuses: true, holdoffOverride: -1f);
 
         if (livingEnemies.Count == 0)
@@ -266,15 +312,16 @@ public class RoomEncounter : MonoBehaviour
         Transform playerTransform = player != null ? player.transform : null;
         int spawnedOverclock = 0;
         int spawnedRepair = 0;
+        int spawnedShielder = 0;
 
         if (hasMega)
-            TryPlanSpawn(bonusMegaPrefab, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair);
+            TryPlanSpawn(bonusMegaPrefab, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
 
         if (hasRaidSupport)
         {
-            GameObject support = ChooseRaidSupportPrefab(spawnedOverclock, spawnedRepair);
+            GameObject support = ChooseRaidSupportPrefab(spawnedOverclock, spawnedRepair, spawnedShielder);
             if (support != null)
-                TryPlanSpawn(support, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair);
+                TryPlanSpawn(support, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
         }
 
         if (!hasNormalPool)
@@ -285,11 +332,12 @@ public class RoomEncounter : MonoBehaviour
             GameObject prefab = ChooseEnemyPrefab(
                 eligiblePrefabs,
                 spawnedOverclock,
-                spawnedRepair);
+                spawnedRepair,
+                spawnedShielder);
             if (prefab == null)
                 continue;
 
-            TryPlanSpawn(prefab, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair);
+            TryPlanSpawn(prefab, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
         }
 
         return planned;
@@ -301,7 +349,8 @@ public class RoomEncounter : MonoBehaviour
         Transform player,
         List<PlannedSpawn> planned,
         ref int spawnedOverclock,
-        ref int spawnedRepair)
+        ref int spawnedRepair,
+        ref int spawnedShielder)
     {
         if (prefab == null)
             return;
@@ -315,7 +364,7 @@ public class RoomEncounter : MonoBehaviour
         }
 
         occupiedPositions.Add(spawnPosition);
-        CountBuffSpawn(GetPrefabAi(prefab), ref spawnedOverclock, ref spawnedRepair);
+        CountBuffSpawn(GetPrefabAi(prefab), ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
         planned.Add(new PlannedSpawn
         {
             Prefab = prefab,
@@ -380,7 +429,7 @@ public class RoomEncounter : MonoBehaviour
         SpawnPlannedWave(planned, holdoff);
     }
 
-    GameObject ChooseRaidSupportPrefab(int spawnedOverclock, int spawnedRepair)
+    GameObject ChooseRaidSupportPrefab(int spawnedOverclock, int spawnedRepair, int spawnedShielder)
     {
         if (enemyPrefabs == null || enemyPrefabs.Length == 0)
             return null;
@@ -396,7 +445,7 @@ public class RoomEncounter : MonoBehaviour
             if (ai == null || !ai.IsSupportEnemy)
                 continue;
 
-            if (!CanSpawnBuffPrefab(prefab, spawnedOverclock, spawnedRepair))
+            if (!CanSpawnBuffPrefab(prefab, spawnedOverclock, spawnedRepair, spawnedShielder))
                 continue;
 
             supports.Add(prefab);
@@ -422,7 +471,8 @@ public class RoomEncounter : MonoBehaviour
     GameObject ChooseEnemyPrefab(
         List<GameObject> eligiblePrefabs,
         int spawnedOverclock,
-        int spawnedRepair)
+        int spawnedRepair,
+        int spawnedShielder)
     {
         eligiblePrefabs.Clear();
         for (int i = 0; i < enemyPrefabs.Length; i++)
@@ -431,7 +481,7 @@ public class RoomEncounter : MonoBehaviour
             if (prefab == null)
                 continue;
 
-            if (!CanSpawnBuffPrefab(prefab, spawnedOverclock, spawnedRepair))
+            if (!CanSpawnBuffPrefab(prefab, spawnedOverclock, spawnedRepair, spawnedShielder))
                 continue;
 
             eligiblePrefabs.Add(prefab);
@@ -446,13 +496,16 @@ public class RoomEncounter : MonoBehaviour
     bool CanSpawnBuffPrefab(
         GameObject prefab,
         int spawnedOverclock,
-        int spawnedRepair)
+        int spawnedRepair,
+        int spawnedShielder)
     {
         EnemyAI ai = GetPrefabAi(prefab);
         if (ai is OverclockEnemyAI)
             return spawnedOverclock < maxOverclockPerRoom;
         if (ai is RepairEnemyAI)
             return spawnedRepair < maxRepairPerRoom;
+        if (ai is ShielderEnemyAI)
+            return spawnedShielder < maxShielderPerRoom;
 
         return true;
     }
@@ -460,12 +513,15 @@ public class RoomEncounter : MonoBehaviour
     static void CountBuffSpawn(
         EnemyAI ai,
         ref int spawnedOverclock,
-        ref int spawnedRepair)
+        ref int spawnedRepair,
+        ref int spawnedShielder)
     {
         if (ai is OverclockEnemyAI)
             spawnedOverclock++;
         else if (ai is RepairEnemyAI)
             spawnedRepair++;
+        else if (ai is ShielderEnemyAI)
+            spawnedShielder++;
     }
 
     static EnemyAI GetPrefabAi(GameObject prefab)
@@ -554,6 +610,81 @@ public class RoomEncounter : MonoBehaviour
         return true;
     }
 
+    void TrySpawnHealthPickup()
+    {
+        if (!pendingHealthPickupDrop || healthPickupPrefab == null)
+            return;
+
+        pendingHealthPickupDrop = false;
+
+        if (!TryChooseHealthPickupPosition(out Vector3 spawnPosition))
+        {
+            Debug.LogWarning(
+                $"Could not find a valid NavMesh position for a health pickup in {room.name}.",
+                this);
+            return;
+        }
+
+        GameObject instance = Instantiate(healthPickupPrefab, spawnPosition, Quaternion.identity);
+        if (instance.TryGetComponent(out HealthPickup pickup))
+            pickup.Configure(healthPickupHealAmount);
+    }
+
+    bool TryChooseHealthPickupPosition(out Vector3 spawnPosition)
+    {
+        spawnPosition = default;
+        if (room == null)
+            room = GetComponent<RoomDefinition>();
+        if (room == null)
+            return false;
+
+        var filter = new NavMeshQueryFilter
+        {
+            agentTypeID = 0,
+            areaMask = NavMesh.AllAreas
+        };
+
+        float halfWidth = Mathf.Max(0.5f, room.FootprintSize.x * 0.5f - edgePadding);
+        float halfDepth = Mathf.Max(0.5f, room.FootprintSize.y * 0.5f - edgePadding);
+        Rect allowedFootprint = room.GetWorldFootprint(-edgePadding);
+        Vector3 center = room.transform.TransformPoint(room.FootprintCenter);
+        float minCenterDistanceSqr = healthPickupMinCenterDistance * healthPickupMinCenterDistance;
+        var candidates = new List<Vector3>();
+
+        int attempts = Mathf.Max(1, healthPickupSpawnAttempts);
+        for (int attempt = 0; attempt < attempts; attempt++)
+        {
+            Vector3 localPoint = room.FootprintCenter + new Vector3(
+                Random.Range(-halfWidth, halfWidth),
+                1f,
+                Random.Range(-halfDepth, halfDepth));
+            Vector3 desired = room.transform.TransformPoint(localPoint);
+
+            if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, healthPickupSampleRadius, filter))
+                continue;
+
+            if (hit.position.y - room.transform.position.y > maximumSpawnHeight)
+                continue;
+
+            Vector2 hitXZ = new Vector2(hit.position.x, hit.position.z);
+            if (!allowedFootprint.Contains(hitXZ))
+                continue;
+
+            Vector3 centerOffset = hit.position - center;
+            centerOffset.y = 0f;
+            if (centerOffset.sqrMagnitude < minCenterDistanceSqr)
+                continue;
+
+            candidates.Add(hit.position);
+        }
+
+        if (candidates.Count == 0)
+            return false;
+
+        spawnPosition = candidates[Random.Range(0, candidates.Count)];
+        return true;
+    }
+
     void CompleteEncounter()
     {
         if (cleared)
@@ -562,8 +693,26 @@ public class RoomEncounter : MonoBehaviour
         cleared = true;
         bootLoopWavePending = false;
         ClearSpawnMarkers();
+        EndPacketLossEffect();
         SetDoorsLocked(false);
+        TrySpawnHealthPickup();
         Cleared?.Invoke();
+    }
+
+    void BeginPacketLossEffect()
+    {
+        if (roomModifier != RoomModifierType.PacketLoss || packetLossFizzleChance <= 0f)
+            return;
+
+        PacketLossCombatEffect.Begin(packetLossFizzleChance);
+    }
+
+    void EndPacketLossEffect()
+    {
+        if (roomModifier != RoomModifierType.PacketLoss)
+            return;
+
+        PacketLossCombatEffect.End();
     }
 
     void SetDoorsLocked(bool locked)

@@ -44,7 +44,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88cf6bc90c9dc9d46846b6302f620fce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLegStepper
-  stepDistance: 1.6
+  stepDistance: 1.4
   stepDuration: 0.2
   stepHeight: 0.1
   overshootMultiplier: 0
@@ -527,7 +527,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88cf6bc90c9dc9d46846b6302f620fce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLegStepper
-  stepDistance: 1.6
+  stepDistance: 1.4
   stepDuration: 0.2
   stepHeight: 0.1
   overshootMultiplier: 0
@@ -597,7 +597,7 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 1.25
-  m_Speed: 3
+  m_Speed: 4.5
   m_Acceleration: 8
   avoidancePriority: 50
   m_AngularSpeed: 60
@@ -2006,7 +2006,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88cf6bc90c9dc9d46846b6302f620fce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLegStepper
-  stepDistance: 1.6
+  stepDistance: 1.4
   stepDuration: 0.2
   stepHeight: 0.1
   overshootMultiplier: 0
@@ -2201,7 +2201,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88cf6bc90c9dc9d46846b6302f620fce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLegStepper
-  stepDistance: 1.6
+  stepDistance: 1.4
   stepDuration: 0.2
   stepHeight: 0.1
   overshootMultiplier: 0

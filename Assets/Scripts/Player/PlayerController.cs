@@ -498,6 +498,16 @@ public class PlayerController : MonoBehaviour, IDamageable
             Die();
     }
 
+    public bool TryHeal(float amount)
+    {
+        if (amount <= 0f || isDead || currentHealth >= maxHealth)
+            return false;
+
+        currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
+        HealthChanged?.Invoke(currentHealth, maxHealth);
+        return true;
+    }
+
     void Die()
     {
         isDead = true;
