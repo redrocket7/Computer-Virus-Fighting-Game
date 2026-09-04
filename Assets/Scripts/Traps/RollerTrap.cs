@@ -347,15 +347,21 @@ public class RollerTrap : MonoBehaviour
             return false;
 
         Vector3 center = transform.TransformPoint(bodyCollider.center);
-        float scaledRadius = Mathf.Max(
-            0.1f,
-            bodyCollider.radius * Mathf.Max(transform.lossyScale.x, transform.lossyScale.z));
+        Vector3 localAxis = GetCapsuleAxis(bodyCollider.direction);
+        float heightScale = GetLocalAxisScale(localAxis);
+        float radiusScale = GetLocalRadiusScale(localAxis);
+
+        float scaledRadius = Mathf.Max(0.1f, bodyCollider.radius * radiusScale);
         float scaledHeight = Mathf.Max(
             scaledRadius * 2f,
-            bodyCollider.height * transform.lossyScale.y);
+            bodyCollider.height * heightScale);
         float halfSegment = Mathf.Max(0f, scaledHeight * 0.5f - scaledRadius);
 
-        Vector3 axis = GetCapsuleAxis(bodyCollider.direction);
+        Vector3 axis = transform.TransformDirection(localAxis);
+        if (axis.sqrMagnitude < 0.0001f)
+            return false;
+
+        axis.Normalize();
         point1 = center - axis * halfSegment;
         point2 = center + axis * halfSegment;
         radius = scaledRadius;
@@ -372,6 +378,24 @@ public class RollerTrap : MonoBehaviour
         };
     }
 
+    float GetLocalAxisScale(Vector3 localAxis)
+    {
+        Vector3 scale = transform.lossyScale;
+        return Mathf.Abs(localAxis.x) * scale.x +
+               Mathf.Abs(localAxis.y) * scale.y +
+               Mathf.Abs(localAxis.z) * scale.z;
+    }
+
+    float GetLocalRadiusScale(Vector3 localAxis)
+    {
+        Vector3 scale = transform.lossyScale;
+        if (Mathf.Abs(localAxis.x) > 0.5f)
+            return Mathf.Max(Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+        if (Mathf.Abs(localAxis.z) > 0.5f)
+            return Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y));
+        return Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+    }
+
     Vector3 GetFlattenedWorldDirection(Vector3 localDirection)
     {
         Vector3 direction = transform.TransformDirection(localDirection);
@@ -383,9 +407,8 @@ public class RollerTrap : MonoBehaviour
     {
         if (bodyCollider != null)
         {
-            rollRadius = Mathf.Max(
-                0.25f,
-                bodyCollider.radius * Mathf.Max(transform.lossyScale.x, transform.lossyScale.z));
+            Vector3 localAxis = GetCapsuleAxis(bodyCollider.direction);
+            rollRadius = Mathf.Max(0.25f, bodyCollider.radius * GetLocalRadiusScale(localAxis));
             return;
         }
 

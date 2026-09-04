@@ -19,6 +19,14 @@ public static class PacketLossCombatEffect
     public static void End()
     {
         activeEncounters = Mathf.Max(0, activeEncounters - 1);
+        if (activeEncounters == 0)
+            fizzleChance = 0f;
+    }
+
+    public static void Reset()
+    {
+        activeEncounters = 0;
+        fizzleChance = 0f;
     }
 
     public static bool ShouldFizzlePlayerShot()

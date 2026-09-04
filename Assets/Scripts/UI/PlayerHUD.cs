@@ -37,9 +37,27 @@ public class PlayerHUD : MonoBehaviour
     Button restartButton;
     Font font;
     bool isGameOver;
+    bool boundToPlayer;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void RegisterSceneHook()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void Bootstrap()
+    static void BootstrapAfterSceneLoad()
+    {
+        EnsureExists();
+    }
+
+    static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        EnsureExists();
+    }
+
+    public static void EnsureExists()
     {
         if (FindAnyObjectByType<PlayerHUD>() != null)
             return;
@@ -65,29 +83,61 @@ public class PlayerHUD : MonoBehaviour
 
     void OnEnable()
     {
-        if (player == null)
-            player = FindAnyObjectByType<PlayerController>();
+        BindToPlayer();
+    }
 
-        if (player == null)
+    void Start()
+    {
+        // Scene reload can race component enable order; rebind once Start runs.
+        BindToPlayer();
+    }
+
+    void OnDisable()
+    {
+        UnbindFromPlayer();
+    }
+
+    void BindToPlayer()
+    {
+        PlayerController found = player != null
+            ? player
+            : FindAnyObjectByType<PlayerController>();
+
+        if (found == null)
             return;
 
+        if (boundToPlayer && player == found)
+        {
+            OnHealthChanged(player.CurrentHealth, player.MaxHealth);
+            OnWeaponChanged(player.CurrentWeaponName);
+            SetGameOverVisible(player.IsDead);
+            return;
+        }
+
+        UnbindFromPlayer();
+        player = found;
         player.HealthChanged += OnHealthChanged;
         player.Died += OnPlayerDied;
         player.WeaponChanged += OnWeaponChanged;
+        boundToPlayer = true;
 
         OnHealthChanged(player.CurrentHealth, player.MaxHealth);
         OnWeaponChanged(player.CurrentWeaponName);
         SetGameOverVisible(player.IsDead);
     }
 
-    void OnDisable()
+    void UnbindFromPlayer()
     {
-        if (player == null)
+        if (!boundToPlayer || player == null)
+        {
+            boundToPlayer = false;
             return;
+        }
 
         player.HealthChanged -= OnHealthChanged;
         player.Died -= OnPlayerDied;
         player.WeaponChanged -= OnWeaponChanged;
+        boundToPlayer = false;
     }
 
     void Update()
@@ -148,11 +198,27 @@ public class PlayerHUD : MonoBehaviour
     void RestartRun()
     {
         Time.timeScale = 1f;
+        CleanupTransientUi();
+
         Scene active = SceneManager.GetActiveScene();
         if (active.buildIndex >= 0)
             SceneManager.LoadScene(active.buildIndex);
         else
             SceneManager.LoadScene(active.name);
+    }
+
+    static void CleanupTransientUi()
+    {
+        PacketLossCombatEffect.Reset();
+
+        // EventSystems were previously DontDestroyOnLoad and could linger across restarts.
+        // Tear them down so the next HUD creates a fresh one.
+        EventSystem[] eventSystems = FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < eventSystems.Length; i++)
+        {
+            if (eventSystems[i] != null)
+                Destroy(eventSystems[i].gameObject);
+        }
     }
 
     static bool WasRestartPressed()
@@ -182,8 +248,7 @@ public class PlayerHUD : MonoBehaviour
         if (FindAnyObjectByType<EventSystem>() != null)
             return;
 
-        var go = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
-        DontDestroyOnLoad(go);
+        new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
     }
 
     void BuildCanvas()
@@ -192,10 +257,13 @@ public class PlayerHUD : MonoBehaviour
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
 
-        var scaler = gameObject.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.matchWidthOrHeight = 0.5f;
+        if (GetComponent<CanvasScaler>() == null)
+        {
+            var scaler = gameObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+        }
 
         if (GetComponent<GraphicRaycaster>() == null)
             gameObject.AddComponent<GraphicRaycaster>();

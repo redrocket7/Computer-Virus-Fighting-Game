@@ -530,6 +530,7 @@ MonoBehaviour:
   - {fileID: 1771518582702127463, guid: fe962da04332ef94ab34936a9fed5620, type: 3}
   - {fileID: 1771518582702127463, guid: 5b948bfc0488c4d42b1cd126361125b1, type: 3}
   - {fileID: 1771518582702127463, guid: d7e8eaabda4cfa14ea32478f41515b6a, type: 3}
+  - {fileID: 1771518582702127463, guid: f00d9c5aa34f0c24d927100cd710c61a, type: 3}
   enemyAttackDelay: 0.5
   maxOverclockPerRoom: 1
   maxRepairPerRoom: 1
@@ -565,7 +566,7 @@ MonoBehaviour:
   excludeStartRoomForModifiers: 1
   healthPickupPrefab: {fileID: 8456123901746283011, guid: a1b2c3d4e5f6789012345678abcdef05, type: 3}
   healthPickupDropChance: 0.25
-  healthPickupHealAmount: 1
+  healthPickupHealAmount: 2
   excludeStartRoomForHealthPickup: 1
   healthPickupMinCenterDistance: 14
   healthPickupSampleRadius: 3
@@ -576,7 +577,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   player: {fileID: 1288065130}
-  enableFogCover: 1
+  enableFogCover: 0
   fogCoverMaterial: {fileID: 2100000, guid: 80ff4075a157b754c9f065444bfbb63e, type: 2}
   fogCoverColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
   fogOverrideMaterialColor: 1

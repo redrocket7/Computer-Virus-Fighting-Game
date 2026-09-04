@@ -3139,6 +3139,8 @@ Transform:
   - {fileID: 9102220000000047}
   - {fileID: 9102220000000049}
   - {fileID: 9102220000000051}
+  - {fileID: 798779569982775246}
+  - {fileID: 7236596255520211388}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!65 &9102220000000001
@@ -3220,5 +3222,137 @@ MonoBehaviour:
   maximumSpawnHeight: 1.5
   maxOverclockPerRoom: 1
   maxRepairPerRoom: 1
+  maxShielderPerRoom: 1
   shieldSpawnChance: 0.2
   shieldHealth: 4
+  healthPickupMinCenterDistance: 14
+  healthPickupSampleRadius: 3
+  healthPickupSpawnAttempts: 48
+--- !u!1001 &4485619897542384340
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 7198902801634050418}
+    m_Modifications:
+    - target: {fileID: 1669413911818276018, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_Name
+      value: Wall gun trap (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 5847293016458928371, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: firstShotDelay
+      value: 0.975
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -16
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.25
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 10.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.999962
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.008726558
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+--- !u!4 &7236596255520211388 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+  m_PrefabInstance: {fileID: 4485619897542384340}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1001 &5852506582338618534
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 7198902801634050418}
+    m_Modifications:
+    - target: {fileID: 1669413911818276018, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_Name
+      value: Wall gun trap
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 16
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.25
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 10.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.999962
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.008726558
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+--- !u!4 &798779569982775246 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
+  m_PrefabInstance: {fileID: 5852506582338618534}
+  m_PrefabAsset: {fileID: 0}

@@ -649,16 +649,36 @@ public class RoomEncounter : MonoBehaviour
         Rect allowedFootprint = room.GetWorldFootprint(-edgePadding);
         Vector3 center = room.transform.TransformPoint(room.FootprintCenter);
         float minCenterDistanceSqr = healthPickupMinCenterDistance * healthPickupMinCenterDistance;
-        var candidates = new List<Vector3>();
 
+        PlayerController player = PlayerController.Instance != null
+            ? PlayerController.Instance
+            : FindAnyObjectByType<PlayerController>();
+        Vector3 playerPosition = player != null ? player.transform.position : center;
+
+        var candidates = new List<Vector3>();
         int attempts = Mathf.Max(1, healthPickupSpawnAttempts);
+
+        // Bias samples toward the player so nearby NavMesh spots are more likely.
         for (int attempt = 0; attempt < attempts; attempt++)
         {
-            Vector3 localPoint = room.FootprintCenter + new Vector3(
-                Random.Range(-halfWidth, halfWidth),
-                1f,
-                Random.Range(-halfDepth, halfDepth));
-            Vector3 desired = room.transform.TransformPoint(localPoint);
+            Vector3 desired;
+            if (player != null && attempt < attempts / 2)
+            {
+                float radius = Random.Range(2f, Mathf.Max(4f, healthPickupMinCenterDistance));
+                float angle = Random.Range(0f, Mathf.PI * 2f);
+                desired = playerPosition + new Vector3(
+                    Mathf.Cos(angle) * radius,
+                    1f,
+                    Mathf.Sin(angle) * radius);
+            }
+            else
+            {
+                Vector3 localPoint = room.FootprintCenter + new Vector3(
+                    Random.Range(-halfWidth, halfWidth),
+                    1f,
+                    Random.Range(-halfDepth, halfDepth));
+                desired = room.transform.TransformPoint(localPoint);
+            }
 
             if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, healthPickupSampleRadius, filter))
                 continue;
@@ -681,7 +701,22 @@ public class RoomEncounter : MonoBehaviour
         if (candidates.Count == 0)
             return false;
 
-        spawnPosition = candidates[Random.Range(0, candidates.Count)];
+        // Prefer the valid candidate closest to the player.
+        float bestDistanceSqr = float.MaxValue;
+        int bestIndex = 0;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            Vector3 offset = candidates[i] - playerPosition;
+            offset.y = 0f;
+            float distanceSqr = offset.sqrMagnitude;
+            if (distanceSqr >= bestDistanceSqr)
+                continue;
+
+            bestDistanceSqr = distanceSqr;
+            bestIndex = i;
+        }
+
+        spawnPosition = candidates[bestIndex];
         return true;
     }
 

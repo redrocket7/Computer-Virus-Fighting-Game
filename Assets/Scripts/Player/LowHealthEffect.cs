@@ -47,8 +47,25 @@ public class LowHealthEffect : MonoBehaviour
     public static float GlitchIntensity { get; private set; }
     public static float GlitchBurst { get; private set; }
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void RegisterSceneHook()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
+    {
+        EnsureExists();
+    }
+
+    static void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+    {
+        EnsureExists();
+    }
+
+    public static void EnsureExists()
     {
         if (FindAnyObjectByType<LowHealthEffect>() != null)
             return;
@@ -60,6 +77,59 @@ public class LowHealthEffect : MonoBehaviour
         go.AddComponent<LowHealthEffect>();
     }
 
+    bool boundToPlayer;
+
+    void OnEnable()
+    {
+        BindToPlayer();
+    }
+
+    void Start()
+    {
+        BindToPlayer();
+    }
+
+    void OnDisable()
+    {
+        UnbindFromPlayer();
+        GlitchIntensity = 0f;
+        GlitchBurst = 0f;
+    }
+
+    void BindToPlayer()
+    {
+        PlayerController found = player != null
+            ? player
+            : FindAnyObjectByType<PlayerController>();
+
+        if (found == null)
+            return;
+
+        if (boundToPlayer && player == found)
+        {
+            OnHealthChanged(player.CurrentHealth, player.MaxHealth);
+            return;
+        }
+
+        UnbindFromPlayer();
+        player = found;
+        player.HealthChanged += OnHealthChanged;
+        boundToPlayer = true;
+        OnHealthChanged(player.CurrentHealth, player.MaxHealth);
+    }
+
+    void UnbindFromPlayer()
+    {
+        if (!boundToPlayer || player == null)
+        {
+            boundToPlayer = false;
+            return;
+        }
+
+        player.HealthChanged -= OnHealthChanged;
+        boundToPlayer = false;
+    }
+
     void Awake()
     {
         if (player == null)
@@ -69,27 +139,6 @@ public class LowHealthEffect : MonoBehaviour
             volume = FindAnyObjectByType<Volume>();
 
         EnsureEffects();
-    }
-
-    void OnEnable()
-    {
-        if (player == null)
-            player = FindAnyObjectByType<PlayerController>();
-
-        if (player == null)
-            return;
-
-        player.HealthChanged += OnHealthChanged;
-        OnHealthChanged(player.CurrentHealth, player.MaxHealth);
-    }
-
-    void OnDisable()
-    {
-        if (player != null)
-            player.HealthChanged -= OnHealthChanged;
-
-        GlitchIntensity = 0f;
-        GlitchBurst = 0f;
     }
 
     void OnDestroy()

@@ -48,27 +48,34 @@ public class Projectile : MonoBehaviour
 
     public void Launch(Vector3 fireDirection, Transform source = null)
     {
-        Launch(fireDirection, source, false);
+        Launch(fireDirection, source, false, -1f);
     }
 
     public void LaunchAsEnemy(Vector3 fireDirection, Transform source)
     {
-        Launch(fireDirection, source, true);
+        Launch(fireDirection, source, true, -1f);
     }
 
-    void Launch(Vector3 fireDirection, Transform source, bool enemyProjectile)
+    public void LaunchAsEnemy(Vector3 fireDirection, Transform source, float damageOverride)
+    {
+        Launch(fireDirection, source, true, Mathf.Max(0f, damageOverride));
+    }
+
+    void Launch(Vector3 fireDirection, Transform source, bool enemyProjectile, float damageOverride)
     {
         owner = source;
         firedByEnemy = enemyProjectile;
-        outgoingDamage = damage;
-        outgoingExplosionDamage = explosionDamage;
+        float baseDamage = damageOverride >= 0f ? damageOverride : damage;
+        float baseExplosionDamage = explosionDamage;
+        outgoingDamage = baseDamage;
+        outgoingExplosionDamage = baseExplosionDamage;
         if (enemyProjectile && source != null)
         {
             EnemyAI ownerAi = source.GetComponentInParent<EnemyAI>();
             if (ownerAi != null)
             {
-                outgoingDamage = ownerAi.ScaleOutgoingDamage(damage);
-                outgoingExplosionDamage = ownerAi.ScaleOutgoingDamage(explosionDamage);
+                outgoingDamage = ownerAi.ScaleOutgoingDamage(baseDamage);
+                outgoingExplosionDamage = ownerAi.ScaleOutgoingDamage(baseExplosionDamage);
             }
         }
 
@@ -90,6 +97,32 @@ public class Projectile : MonoBehaviour
             lifeRemaining = lifetime;
         else
             Destroy(gameObject, lifetime);
+
+        IgnoreOwnerCollisions();
+    }
+
+    void IgnoreOwnerCollisions()
+    {
+        if (owner == null)
+            return;
+
+        Collider[] bulletColliders = GetComponentsInChildren<Collider>();
+        Collider[] ownerColliders = owner.GetComponentsInChildren<Collider>();
+        for (int i = 0; i < bulletColliders.Length; i++)
+        {
+            Collider bulletCollider = bulletColliders[i];
+            if (bulletCollider == null)
+                continue;
+
+            for (int j = 0; j < ownerColliders.Length; j++)
+            {
+                Collider ownerCollider = ownerColliders[j];
+                if (ownerCollider == null)
+                    continue;
+
+                Physics.IgnoreCollision(bulletCollider, ownerCollider, true);
+            }
+        }
     }
 
     protected virtual void OnEnable()
@@ -143,6 +176,9 @@ public class Projectile : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
+        if (!launched)
+            return;
+
         if (((1 << other.gameObject.layer) & hitMask) == 0)
             return;
 

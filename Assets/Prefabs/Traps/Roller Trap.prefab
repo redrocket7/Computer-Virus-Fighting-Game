@@ -53,8 +53,8 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 2
-  m_Height: 8
+  m_Radius: 2.5
+  m_Height: 9
   m_Direction: 0
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &5886799861131727855
@@ -69,18 +69,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b2c3d4e5f6a7890123456789abcdef03, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RollerTrap
-  localMoveDirection: {x: 1, y: 0, z: 0}
-  moveSpeed: 4
+  localMoveDirection: {x: 0, y: 0, z: 1}
+  moveSpeed: 6
   wallBounceCooldown: 0.08
   wallMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  waitForRoomEncounter: 1
+  castSkin: 0.05
   rollVisual: {fileID: 4990802485353532281}
   bodyCollider: {fileID: 5947293016458928375}
   visualRollMultiplier: 1
   contactDamage: 1
   damageCooldown: 0.6
+  pushEnemies: 1
+  enemyPushSampleDistance: 2
+  waitForRoomEncounter: 1
 --- !u!1 &7333190547030891906
 GameObject:
   m_ObjectHideFlags: 0
@@ -92,6 +95,7 @@ GameObject:
   - component: {fileID: 4990802485353532281}
   - component: {fileID: 4893550082183581549}
   - component: {fileID: 3571669921005400598}
+  - component: {fileID: 1318555911836405163}
   m_Layer: 0
   m_Name: Cylinder
   m_TagString: Untagged
@@ -107,13 +111,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7333190547030891906}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
+  m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 4, y: 4, z: 4}
+  m_LocalScale: {x: 5, y: 4, z: 5}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3233136523212736811}
-  m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
 --- !u!33 &4893550082183581549
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -171,3 +175,19 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!208 &1318555911836405163
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7333190547030891906}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.5, y: 1, z: 0.5}
+  m_MoveThreshold: 0.1
+  m_Carve: 1
+  m_CarveOnlyStationary: 0
+  m_Center: {x: 0, y: 0, z: 0}
+  m_TimeToStationary: 0.5
