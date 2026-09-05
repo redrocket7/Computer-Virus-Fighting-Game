@@ -16,6 +16,10 @@ public class EnemyAI : MonoBehaviour, IDamageable
     [Header("Health")]
     [SerializeField] float maxHealth = 1f;
 
+    [Header("Spawn Difficulty")]
+    [Tooltip("Higher = harder for depth-weighted spawns. 0 = derive from Max Health.")]
+    [SerializeField] int threatRating;
+
     [Header("Contact Damage")]
     [Tooltip("Damage dealt to the player on touch. Set to 0 for enemies that attack another way.")]
     [SerializeField] float contactDamage = 1f;
@@ -52,6 +56,9 @@ public class EnemyAI : MonoBehaviour, IDamageable
     public float DamageMultiplier => damageMultiplier;
     public float CurrentHealth => currentHealth;
     public float MaxHealth => maxHealth;
+    public int ThreatRating => threatRating > 0
+        ? threatRating
+        : Mathf.Max(1, Mathf.RoundToInt(maxHealth));
     public bool IsDamaged => currentHealth > 0f && currentHealth < maxHealth - 0.001f;
     public bool IsAlive => currentHealth > 0f;
     public RoomEncounter BoundEncounter => boundEncounter;

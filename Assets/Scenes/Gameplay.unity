@@ -542,7 +542,7 @@ MonoBehaviour:
   - {fileID: 1771518582702127463, guid: 31a9c2507c598854cbf76de1b6dace4f, type: 3}
   megaEnemySpawnChance: 1
   excludeStartRoomForMega: 1
-  megaPreferredMaxDepth: 5
+  megaMinimumDepth: 4
   targetRoomCount: 20
   maxPlacementAttempts: 2000
   overlapPadding: 3
@@ -556,6 +556,10 @@ MonoBehaviour:
   scaleSpawnCountByDepth: 1
   extraEnemiesPerDepth: 1
   maxSpawnCount: 0
+  scaleEnemyMixByDepth: 1
+  enemyMixFullDepth: 8
+  easyThreatExponent: -1.25
+  hardThreatExponent: 1.4
   raidArrayChance: 0.2
   bootLoopChance: 0.2
   bootLoopExtraWaves: 1
@@ -571,13 +575,24 @@ MonoBehaviour:
   healthPickupMinCenterDistance: 14
   healthPickupSampleRadius: 3
   healthPickupSpawnAttempts: 48
+  usbDashPickupPrefab: {fileID: 7123456789012345001, guid: e2f3a4b5c6d708194a5b6c7d8e9f0a13, type: 3}
+  usbDashDropChance: 0.45
+  excludeStartRoomForUsbDash: 1
+  goatDashPickupPrefab: {fileID: 8234567890123456001, guid: b4c5d6e7f8091a2b3c4d5e6f708192a3, type: 3}
+  goatDashDropChance: 0.45
+  excludeStartRoomForGoatDash: 1
+  shotgunPickupPrefab: {fileID: 1845612390174628301, guid: edfe4318fe3cc464d88ddff3812d70cc, type: 3}
+  machineGunPickupPrefab: {fileID: 2845612390174628301, guid: 1b9a5cbc76e302342a3af3625e0e35b7, type: 3}
+  rocketLauncherPickupPrefab: {fileID: 3845612390174628301, guid: 54c1d7b78ccdb3c42bef344c77de97f0, type: 3}
+  weaponPickupDropChance: 0.55
+  excludeStartRoomForWeaponPickups: 1
   smallAgentTypeId: 0
   fatAgentTypeId: -1372625422
   groundMask:
     serializedVersion: 2
     m_Bits: 8
   player: {fileID: 1288065130}
-  enableFogCover: 0
+  enableFogCover: 1
   fogCoverMaterial: {fileID: 2100000, guid: 80ff4075a157b754c9f065444bfbb63e, type: 2}
   fogCoverColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
   fogOverrideMaterialColor: 1
@@ -696,6 +711,16 @@ MonoBehaviour:
   dashSpeed: 30
   dashDuration: 0.2
   dashCooldown: 1.5
+  hasUsbDash: 0
+  usbTrailDuration: 0.4
+  usbTrailRadius: 0.85
+  usbTrailSpawnInterval: 0.04
+  usbFirewallPhaseLinger: 0.12
+  hasGoatDash: 0
+  goatDashDamage: 2
+  goatDashRamRadius: 1.1
+  goatDashRamHeight: 1.6
+  goatDashInvulnLinger: 0.12
   worldCamera: {fileID: 330585545}
   rotationSpeed: 720
   lookStickDeadzone: 0.25
@@ -732,6 +757,7 @@ MonoBehaviour:
     spreadAngle: 0
     spreadJitter: 0
   startingWeaponIndex: 0
+  startingUnlockedWeapons: 00000000
 --- !u!114 &1288065125
 MonoBehaviour:
   m_ObjectHideFlags: 0

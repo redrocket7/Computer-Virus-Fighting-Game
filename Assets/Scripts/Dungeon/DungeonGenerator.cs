@@ -41,8 +41,8 @@ public class DungeonGenerator : MonoBehaviour
     [Tooltip("When enabled, the start room is never chosen for a mega spawn.")]
     [SerializeField] bool excludeStartRoomForMega = true;
     [Min(1)]
-    [Tooltip("Prefer mega hosts within this many door-hops of the start room.")]
-    [SerializeField] int megaPreferredMaxDepth = 2;
+    [Tooltip("Mega enemies only spawn in rooms at least this many door-hops from the start.")]
+    [SerializeField] int megaMinimumDepth = 4;
 
     [SerializeField] int targetRoomCount = 6;
     [SerializeField] int maxPlacementAttempts = 80;
@@ -76,6 +76,15 @@ public class DungeonGenerator : MonoBehaviour
     [Min(0)]
     [Tooltip("Hard cap on spawn count after depth scaling. 0 = no cap.")]
     [SerializeField] int maxSpawnCount = 0;
+    [Tooltip("Bias enemy picks toward harder foes deeper in the dungeon.")]
+    [SerializeField] bool scaleEnemyMixByDepth = true;
+    [Min(1)]
+    [Tooltip("Door-hops from start where the mix fully favors hard enemies.")]
+    [SerializeField] int enemyMixFullDepth = 8;
+    [Tooltip("Threat weight exponent near the start (negative favors easy / low-threat).")]
+    [SerializeField] float easyThreatExponent = -1.25f;
+    [Tooltip("Threat weight exponent at full depth (positive favors hard / high-threat).")]
+    [SerializeField] float hardThreatExponent = 1.4f;
 
     [Header("Room Modifiers")]
     [Range(0f, 1f)]
@@ -112,6 +121,29 @@ public class DungeonGenerator : MonoBehaviour
     [SerializeField] float healthPickupMinCenterDistance = 14f;
     [SerializeField] float healthPickupSampleRadius = 3f;
     [SerializeField] int healthPickupSpawnAttempts = 48;
+
+    [Header("USB Dash Upgrade")]
+    [SerializeField] GameObject usbDashPickupPrefab;
+    [Range(0f, 1f)]
+    [Tooltip("Chance this dungeon places one USB Dash upgrade in a random combat room.")]
+    [SerializeField] float usbDashDropChance = 0.45f;
+    [SerializeField] bool excludeStartRoomForUsbDash = true;
+
+    [Header("Goat Dash Upgrade")]
+    [SerializeField] GameObject goatDashPickupPrefab;
+    [Range(0f, 1f)]
+    [Tooltip("Chance this dungeon places one Goat Dash upgrade in a random combat room.")]
+    [SerializeField] float goatDashDropChance = 0.45f;
+    [SerializeField] bool excludeStartRoomForGoatDash = true;
+
+    [Header("Weapon Pickups")]
+    [SerializeField] GameObject shotgunPickupPrefab;
+    [SerializeField] GameObject machineGunPickupPrefab;
+    [SerializeField] GameObject rocketLauncherPickupPrefab;
+    [Range(0f, 1f)]
+    [Tooltip("Chance each special weapon is placed once in a random combat room.")]
+    [SerializeField] float weaponPickupDropChance = 0.55f;
+    [SerializeField] bool excludeStartRoomForWeaponPickups = true;
 
     [Header("Navigation")]
     [SerializeField] int smallAgentTypeId = 0;
@@ -179,10 +211,14 @@ public class DungeonGenerator : MonoBehaviour
 
         SealUnusedExits();
         ApplyDepthSpawnScaling();
+        ApplyDepthEnemyMix();
         AssignRoomModifiers();
         AssignMegaEnemy();
         BuildNavigation();
         AssignHealthPickups();
+        AssignUsbDashPickup();
+        AssignGoatDashPickup();
+        AssignWeaponPickups();
         PlacePlayer(start);
         if (enableFogCover)
             EnsureRoomFogCovers();
@@ -303,9 +339,10 @@ public class DungeonGenerator : MonoBehaviour
         Dictionary<RoomDefinition, int> depthByRoom = BuildRoomDepthMap();
         RoomDefinition start = placedRooms[0];
 
-        int preferredMax = Mathf.Max(1, megaPreferredMaxDepth);
-        var preferred = new List<RoomDefinition>();
-        var fallback = new List<RoomDefinition>();
+        int minDepth = Mathf.Max(1, megaMinimumDepth);
+        var eligible = new List<RoomDefinition>();
+        var deepestFallback = new List<RoomDefinition>();
+        int deepestSeen = -1;
 
         for (int i = 0; i < placedRooms.Count; i++)
         {
@@ -321,14 +358,24 @@ public class DungeonGenerator : MonoBehaviour
                 continue;
 
             if (!depthByRoom.TryGetValue(room, out int depth))
-                depth = int.MaxValue;
+                depth = 0;
 
-            fallback.Add(room);
-            if (depth >= 1 && depth <= preferredMax)
-                preferred.Add(room);
+            if (depth > deepestSeen)
+            {
+                deepestSeen = depth;
+                deepestFallback.Clear();
+                deepestFallback.Add(room);
+            }
+            else if (depth == deepestSeen)
+            {
+                deepestFallback.Add(room);
+            }
+
+            if (depth >= minDepth)
+                eligible.Add(room);
         }
 
-        List<RoomDefinition> pool = preferred.Count > 0 ? preferred : fallback;
+        List<RoomDefinition> pool = eligible.Count > 0 ? eligible : deepestFallback;
         if (pool.Count == 0)
             return null;
 
@@ -359,6 +406,31 @@ public class DungeonGenerator : MonoBehaviour
                 scaled = Mathf.Min(scaled, maxSpawnCount);
 
             encounter.SetSpawnCount(scaled);
+        }
+    }
+
+    void ApplyDepthEnemyMix()
+    {
+        Dictionary<RoomDefinition, int> depthByRoom = BuildRoomDepthMap();
+        int referenceDepth = Mathf.Max(1, enemyMixFullDepth);
+
+        for (int i = 0; i < placedRooms.Count; i++)
+        {
+            RoomDefinition room = placedRooms[i];
+            if (room == null)
+                continue;
+
+            RoomEncounter encounter = GetEncounter(room);
+            if (encounter == null)
+                continue;
+
+            depthByRoom.TryGetValue(room, out int depth);
+            encounter.SetEncounterDepth(depth);
+            encounter.SetDepthThreatMixSettings(
+                scaleEnemyMixByDepth,
+                referenceDepth,
+                easyThreatExponent,
+                hardThreatExponent);
         }
     }
 
@@ -734,6 +806,9 @@ public class DungeonGenerator : MonoBehaviour
         encounter?.SetBootLoopTiming(1.5f, 1.25f);
         encounter?.SetPacketLossSettings(0f);
         encounter?.ClearHealthPickupDrop();
+        encounter?.ClearUsbDashPickupDrop();
+        encounter?.ClearGoatDashPickupDrop();
+        encounter?.ClearWeaponPickupDrops();
     }
 
     void AssignHealthPickups()
@@ -763,6 +838,121 @@ public class DungeonGenerator : MonoBehaviour
                 healthPickupSpawnAttempts);
             encounter.ConfigureHealthPickupDrop(healthPickupPrefab, healthPickupHealAmount);
         }
+    }
+
+    void AssignUsbDashPickup()
+    {
+        if (usbDashPickupPrefab == null || usbDashDropChance <= 0f)
+            return;
+
+        if (Random.value > usbDashDropChance)
+            return;
+
+        var candidates = new List<RoomEncounter>();
+        for (int i = 0; i < placedRooms.Count; i++)
+        {
+            RoomDefinition room = placedRooms[i];
+            if (room == null)
+                continue;
+
+            if (excludeStartRoomForUsbDash && i == 0)
+                continue;
+
+            RoomEncounter encounter = room.Encounter;
+            if (encounter == null || !encounter.enabled)
+                continue;
+
+            candidates.Add(encounter);
+        }
+
+        if (candidates.Count == 0)
+            return;
+
+        RoomEncounter chosen = candidates[Random.Range(0, candidates.Count)];
+        chosen.SetHealthPickupSpawnSettings(
+            healthPickupMinCenterDistance,
+            healthPickupSampleRadius,
+            healthPickupSpawnAttempts);
+        chosen.ConfigureUsbDashPickupDrop(usbDashPickupPrefab);
+    }
+
+    void AssignGoatDashPickup()
+    {
+        if (goatDashPickupPrefab == null || goatDashDropChance <= 0f)
+            return;
+
+        if (Random.value > goatDashDropChance)
+            return;
+
+        var candidates = new List<RoomEncounter>();
+        for (int i = 0; i < placedRooms.Count; i++)
+        {
+            RoomDefinition room = placedRooms[i];
+            if (room == null)
+                continue;
+
+            if (excludeStartRoomForGoatDash && i == 0)
+                continue;
+
+            RoomEncounter encounter = room.Encounter;
+            if (encounter == null || !encounter.enabled)
+                continue;
+
+            candidates.Add(encounter);
+        }
+
+        if (candidates.Count == 0)
+            return;
+
+        RoomEncounter chosen = candidates[Random.Range(0, candidates.Count)];
+        chosen.SetHealthPickupSpawnSettings(
+            healthPickupMinCenterDistance,
+            healthPickupSampleRadius,
+            healthPickupSpawnAttempts);
+        chosen.ConfigureGoatDashPickupDrop(goatDashPickupPrefab);
+    }
+
+    void AssignWeaponPickups()
+    {
+        TryAssignSingleWeaponPickup(shotgunPickupPrefab, 1);
+        TryAssignSingleWeaponPickup(machineGunPickupPrefab, 2);
+        TryAssignSingleWeaponPickup(rocketLauncherPickupPrefab, 3);
+    }
+
+    void TryAssignSingleWeaponPickup(GameObject prefab, int weaponIndex)
+    {
+        if (prefab == null || weaponPickupDropChance <= 0f)
+            return;
+
+        if (Random.value > weaponPickupDropChance)
+            return;
+
+        var candidates = new List<RoomEncounter>();
+        for (int i = 0; i < placedRooms.Count; i++)
+        {
+            RoomDefinition room = placedRooms[i];
+            if (room == null)
+                continue;
+
+            if (excludeStartRoomForWeaponPickups && i == 0)
+                continue;
+
+            RoomEncounter encounter = room.Encounter;
+            if (encounter == null || !encounter.enabled)
+                continue;
+
+            candidates.Add(encounter);
+        }
+
+        if (candidates.Count == 0)
+            return;
+
+        RoomEncounter chosen = candidates[Random.Range(0, candidates.Count)];
+        chosen.SetHealthPickupSpawnSettings(
+            healthPickupMinCenterDistance,
+            healthPickupSampleRadius,
+            healthPickupSpawnAttempts);
+        chosen.ConfigureWeaponPickupDrop(prefab, weaponIndex);
     }
 
     bool PassageOverlapsDungeon(

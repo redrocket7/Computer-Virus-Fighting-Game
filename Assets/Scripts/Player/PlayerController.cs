@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -30,6 +31,22 @@ public class PlayerController : MonoBehaviour, IDamageable
     [SerializeField] float dashDuration = 0.16f;
     [SerializeField] float dashCooldown = 0.7f;
 
+    [Header("USB Dash Upgrade")]
+    [SerializeField] bool hasUsbDash;
+    [SerializeField] float usbTrailDuration = 0.4f;
+    [SerializeField] float usbTrailRadius = 0.85f;
+    [SerializeField] float usbTrailSpawnInterval = 0.04f;
+    [Tooltip("Extra seconds after the dash ends where firewalls can still be phased.")]
+    [SerializeField] float usbFirewallPhaseLinger = 0.12f;
+
+    [Header("Goat Dash Upgrade")]
+    [SerializeField] bool hasGoatDash;
+    [SerializeField] float goatDashDamage = 2f;
+    [SerializeField] float goatDashRamRadius = 1.1f;
+    [SerializeField] float goatDashRamHeight = 1.6f;
+    [Tooltip("Extra invulnerability seconds after the Goat Dash ends.")]
+    [SerializeField] float goatDashInvulnLinger = 0.12f;
+
     [Header("Facing")]
     [Tooltip("Leave empty to use Camera.main.")]
     [SerializeField] Camera worldCamera;
@@ -42,6 +59,10 @@ public class PlayerController : MonoBehaviour, IDamageable
     [SerializeField] float fireCooldown = 0.2f;
     [SerializeField] WeaponDefinition[] weapons;
     [SerializeField] int startingWeaponIndex;
+    [Tooltip("Weapon indices unlocked at run start. Index 0 (Pistol) should stay unlocked.")]
+    [SerializeField] int[] startingUnlockedWeapons = { 0 };
+
+    static readonly Collider[] GoatDashHits = new Collider[24];
 
     Rigidbody rb;
     Vector2 moveInput;
@@ -56,14 +77,28 @@ public class PlayerController : MonoBehaviour, IDamageable
     InputAction attackAction;
     bool usingStickAim;
     bool controlsLocked;
+    float usbTrailSpawnTimer;
+    float usbFirewallPhaseTimer;
+    bool usbFirewallPhaseActive;
+    float goatDashInvulnTimer;
+    Collider[] playerColliders;
+    readonly HashSet<EnemyAI> goatDashHitEnemies = new HashSet<EnemyAI>();
+    readonly HashSet<int> unlockedWeapons = new HashSet<int>();
 
     /// <summary>Current health, max health.</summary>
     public event Action<float, float> HealthChanged;
     public event Action Died;
     public event Action<string> WeaponChanged;
+    public event Action UsbDashGranted;
+    public event Action GoatDashGranted;
+    public event Action<int, string> WeaponGranted;
 
     public Vector2 MoveInput => moveInput;
     public bool IsDashing => isDashing;
+    public bool HasUsbDash => hasUsbDash;
+    public bool HasGoatDash => hasGoatDash;
+    public bool IsGoatDashInvulnerable =>
+        hasGoatDash && (isDashing || goatDashInvulnTimer > 0f);
     public float CurrentSpeed => new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z).magnitude;
     public float CurrentHealth => currentHealth;
     public float MaxHealth => maxHealth;
@@ -79,14 +114,18 @@ public class PlayerController : MonoBehaviour, IDamageable
         moveInput = Vector2.zero;
         isDashing = false;
         dashTimer = 0f;
+        goatDashInvulnTimer = 0f;
         if (rb != null)
             rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+        EndUsbFirewallPhase();
     }
 
     public void TeleportTo(Vector3 worldPosition)
     {
         isDashing = false;
         dashTimer = 0f;
+        goatDashInvulnTimer = 0f;
+        EndUsbFirewallPhase();
         moveInput = Vector2.zero;
         if (rb == null)
         {
@@ -134,7 +173,84 @@ public class PlayerController : MonoBehaviour, IDamageable
         if (worldCamera == null)
             worldCamera = Camera.main;
 
+        playerColliders = GetComponentsInChildren<Collider>(true);
+        InitializeUnlockedWeapons();
         SelectWeapon(startingWeaponIndex, notify: false);
+    }
+
+    void InitializeUnlockedWeapons()
+    {
+        unlockedWeapons.Clear();
+        if (startingUnlockedWeapons != null)
+        {
+            for (int i = 0; i < startingUnlockedWeapons.Length; i++)
+            {
+                int index = startingUnlockedWeapons[i];
+                if (IsValidWeaponIndex(index))
+                    unlockedWeapons.Add(index);
+            }
+        }
+
+        if (unlockedWeapons.Count == 0 && IsValidWeaponIndex(0))
+            unlockedWeapons.Add(0);
+
+        if (!IsWeaponUnlocked(startingWeaponIndex))
+            startingWeaponIndex = GetFirstUnlockedWeaponIndex();
+    }
+
+    bool IsValidWeaponIndex(int index)
+    {
+        return weapons != null && index >= 0 && index < weapons.Length;
+    }
+
+    int GetFirstUnlockedWeaponIndex()
+    {
+        if (weapons == null)
+            return 0;
+
+        for (int i = 0; i < weapons.Length; i++)
+        {
+            if (unlockedWeapons.Contains(i))
+                return i;
+        }
+
+        return 0;
+    }
+
+    public bool HasWeapon(int weaponIndex)
+    {
+        return IsWeaponUnlocked(weaponIndex);
+    }
+
+    public bool IsWeaponUnlocked(int weaponIndex)
+    {
+        return IsValidWeaponIndex(weaponIndex) && unlockedWeapons.Contains(weaponIndex);
+    }
+
+    public string GetWeaponDisplayName(int weaponIndex)
+    {
+        if (!IsValidWeaponIndex(weaponIndex))
+            return "Weapon";
+
+        WeaponDefinition weapon = weapons[weaponIndex];
+        if (weapon != null && !string.IsNullOrEmpty(weapon.displayName))
+            return weapon.displayName;
+
+        return "Weapon";
+    }
+
+    /// <summary>Unlocks a weapon by loadout index and equips it. Returns false if already owned.</summary>
+    public bool GrantWeapon(int weaponIndex)
+    {
+        if (isDead || !IsValidWeaponIndex(weaponIndex))
+            return false;
+
+        if (!unlockedWeapons.Add(weaponIndex))
+            return false;
+
+        SelectWeapon(weaponIndex);
+        WeaponGranted?.Invoke(weaponIndex, CurrentWeaponName);
+        return true;
     }
 
     void OnDestroy()
@@ -155,6 +271,9 @@ public class PlayerController : MonoBehaviour, IDamageable
 
         if (dashCooldownTimer > 0f)
             dashCooldownTimer -= Time.deltaTime;
+
+        TickUsbFirewallPhase();
+        TickGoatDashInvulnerability();
 
         if (controlsLocked)
             return;
@@ -225,8 +344,11 @@ public class PlayerController : MonoBehaviour, IDamageable
                 rb.linearVelocity.y,
                 dashDirection.z * dashSpeed);
 
+            TickUsbDashTrail();
+            TickGoatDashRam();
+
             if (dashTimer <= 0f)
-                isDashing = false;
+                EndDash();
 
             return;
         }
@@ -364,6 +486,168 @@ public class PlayerController : MonoBehaviour, IDamageable
         isDashing = true;
         dashTimer = dashDuration;
         dashCooldownTimer = dashCooldown;
+        usbTrailSpawnTimer = 0f;
+        goatDashHitEnemies.Clear();
+
+        if (hasGoatDash)
+            goatDashInvulnTimer = Mathf.Max(goatDashInvulnTimer, goatDashInvulnLinger);
+
+        if (hasUsbDash)
+        {
+            BeginUsbFirewallPhase();
+            SpawnUsbDashTrail();
+        }
+    }
+
+    void EndDash()
+    {
+        isDashing = false;
+        if (hasUsbDash)
+            usbFirewallPhaseTimer = Mathf.Max(usbFirewallPhaseTimer, usbFirewallPhaseLinger);
+        if (hasGoatDash)
+            goatDashInvulnTimer = Mathf.Max(goatDashInvulnTimer, goatDashInvulnLinger);
+    }
+
+    public bool GrantUsbDash()
+    {
+        if (hasUsbDash || isDead)
+            return false;
+
+        hasUsbDash = true;
+        UsbDashGranted?.Invoke();
+        return true;
+    }
+
+    public bool GrantGoatDash()
+    {
+        if (hasGoatDash || isDead)
+            return false;
+
+        hasGoatDash = true;
+        GoatDashGranted?.Invoke();
+        return true;
+    }
+
+    void TickUsbDashTrail()
+    {
+        if (!hasUsbDash)
+            return;
+
+        usbTrailSpawnTimer -= Time.fixedDeltaTime;
+        if (usbTrailSpawnTimer > 0f)
+            return;
+
+        usbTrailSpawnTimer = Mathf.Max(0.01f, usbTrailSpawnInterval);
+        SpawnUsbDashTrail();
+    }
+
+    void SpawnUsbDashTrail()
+    {
+        UsbDashTrail.Spawn(
+            rb.position,
+            dashDirection,
+            usbTrailDuration,
+            usbTrailRadius);
+    }
+
+    void TickGoatDashRam()
+    {
+        if (!hasGoatDash || goatDashDamage <= 0f)
+            return;
+
+        Vector3 point1 = rb.position + Vector3.up * 0.2f;
+        Vector3 point2 = rb.position + Vector3.up * Mathf.Max(0.4f, goatDashRamHeight);
+        float radius = Mathf.Max(0.2f, goatDashRamRadius);
+
+        int hitCount = Physics.OverlapCapsuleNonAlloc(
+            point1,
+            point2,
+            radius,
+            GoatDashHits,
+            ~0,
+            QueryTriggerInteraction.Collide);
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider hit = GoatDashHits[i];
+            if (hit == null)
+                continue;
+
+            if (hit.transform == transform || hit.transform.IsChildOf(transform))
+                continue;
+
+            EnemyAI enemy = hit.GetComponentInParent<EnemyAI>();
+            if (enemy == null || !enemy.IsAlive || !goatDashHitEnemies.Add(enemy))
+                continue;
+
+            enemy.TakeDamage(goatDashDamage);
+        }
+    }
+
+    void TickGoatDashInvulnerability()
+    {
+        if (goatDashInvulnTimer <= 0f)
+            return;
+
+        // Stay invulnerable for the whole dash; linger ticks only after it ends.
+        if (isDashing && hasGoatDash)
+            return;
+
+        goatDashInvulnTimer -= Time.deltaTime;
+        if (goatDashInvulnTimer < 0f)
+            goatDashInvulnTimer = 0f;
+    }
+
+    void TickUsbFirewallPhase()
+    {
+        if (!usbFirewallPhaseActive)
+            return;
+
+        if (isDashing)
+            return;
+
+        usbFirewallPhaseTimer -= Time.deltaTime;
+        if (usbFirewallPhaseTimer > 0f)
+            return;
+
+        EndUsbFirewallPhase();
+    }
+
+    void BeginUsbFirewallPhase()
+    {
+        SetUsbFirewallIgnore(true);
+        usbFirewallPhaseActive = true;
+        usbFirewallPhaseTimer = Mathf.Max(0f, usbFirewallPhaseLinger);
+    }
+
+    void EndUsbFirewallPhase()
+    {
+        SetUsbFirewallIgnore(false);
+        usbFirewallPhaseActive = false;
+        usbFirewallPhaseTimer = 0f;
+    }
+
+    void SetUsbFirewallIgnore(bool ignore)
+    {
+        if (playerColliders == null || playerColliders.Length == 0)
+            playerColliders = GetComponentsInChildren<Collider>(true);
+
+        IReadOnlyList<FirewallTrap> firewalls = FirewallTrap.Active;
+        for (int i = 0; i < firewalls.Count; i++)
+        {
+            FirewallTrap firewall = firewalls[i];
+            if (firewall == null || firewall.BlockingCollider == null)
+                continue;
+
+            for (int c = 0; c < playerColliders.Length; c++)
+            {
+                Collider playerCollider = playerColliders[c];
+                if (playerCollider == null)
+                    continue;
+
+                Physics.IgnoreCollision(playerCollider, firewall.BlockingCollider, ignore);
+            }
+        }
     }
 
     void TryFire()
@@ -440,13 +724,13 @@ public class PlayerController : MonoBehaviour, IDamageable
             return;
 
         if (keyboard.digit1Key.wasPressedThisFrame)
-            SelectWeapon(0);
+            TrySelectUnlockedWeapon(0);
         else if (keyboard.digit2Key.wasPressedThisFrame)
-            SelectWeapon(1);
+            TrySelectUnlockedWeapon(1);
         else if (keyboard.digit3Key.wasPressedThisFrame)
-            SelectWeapon(2);
+            TrySelectUnlockedWeapon(2);
         else if (keyboard.digit4Key.wasPressedThisFrame)
-            SelectWeapon(3);
+            TrySelectUnlockedWeapon(3);
 
         Mouse mouse = Mouse.current;
         if (mouse == null)
@@ -459,17 +743,33 @@ public class PlayerController : MonoBehaviour, IDamageable
             CycleWeapon(-1);
     }
 
+    void TrySelectUnlockedWeapon(int index)
+    {
+        if (!IsWeaponUnlocked(index))
+            return;
+
+        SelectWeapon(index);
+    }
+
     void CycleWeapon(int step)
     {
-        if (weapons == null || weapons.Length == 0)
+        if (weapons == null || weapons.Length == 0 || unlockedWeapons.Count == 0)
             return;
 
         int count = weapons.Length;
-        int nextIndex = (currentWeaponIndex + step) % count;
-        if (nextIndex < 0)
-            nextIndex += count;
+        int nextIndex = currentWeaponIndex;
+        for (int i = 0; i < count; i++)
+        {
+            nextIndex = (nextIndex + step) % count;
+            if (nextIndex < 0)
+                nextIndex += count;
 
-        SelectWeapon(nextIndex);
+            if (unlockedWeapons.Contains(nextIndex))
+            {
+                SelectWeapon(nextIndex);
+                return;
+            }
+        }
     }
 
     void SelectWeapon(int index, bool notify = true)
@@ -480,6 +780,9 @@ public class PlayerController : MonoBehaviour, IDamageable
             return;
         }
 
+        if (!IsWeaponUnlocked(index))
+            index = GetFirstUnlockedWeaponIndex();
+
         currentWeaponIndex = Mathf.Clamp(index, 0, weapons.Length - 1);
         if (notify)
             WeaponChanged?.Invoke(CurrentWeaponName);
@@ -487,7 +790,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public void TakeDamage(float amount)
     {
-        if (amount <= 0f || isDead)
+        if (amount <= 0f || isDead || IsGoatDashInvulnerable)
             return;
 
         currentHealth = Mathf.Max(0f, currentHealth - amount);
@@ -514,6 +817,8 @@ public class PlayerController : MonoBehaviour, IDamageable
         moveInput = Vector2.zero;
         isDashing = false;
         dashTimer = 0f;
+        goatDashInvulnTimer = 0f;
+        EndUsbFirewallPhase();
         rb.linearVelocity = Vector3.zero;
         Died?.Invoke();
     }

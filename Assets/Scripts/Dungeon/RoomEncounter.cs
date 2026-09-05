@@ -52,6 +52,13 @@ public class RoomEncounter : MonoBehaviour
     [SerializeField] float shieldSpawnChance = 0.2f;
     [SerializeField] float shieldHealth = 4f;
 
+    [Header("Depth Threat Mix")]
+    [SerializeField] bool scaleEnemyMixByDepth = true;
+    [SerializeField] int encounterDepth;
+    [SerializeField] int enemyMixFullDepth = 8;
+    [SerializeField] float easyThreatExponent = -1.25f;
+    [SerializeField] float hardThreatExponent = 1.4f;
+
     [Header("Health Pickup Drop")]
     [SerializeField] float healthPickupMinCenterDistance = 14f;
     [SerializeField] float healthPickupSampleRadius = 3f;
@@ -60,6 +67,11 @@ public class RoomEncounter : MonoBehaviour
     GameObject healthPickupPrefab;
     float healthPickupHealAmount;
     bool pendingHealthPickupDrop;
+    GameObject usbDashPickupPrefab;
+    bool pendingUsbDashDrop;
+    GameObject goatDashPickupPrefab;
+    bool pendingGoatDashDrop;
+    readonly List<PendingWeaponPickupDrop> pendingWeaponPickupDrops = new List<PendingWeaponPickupDrop>();
     GameObject bonusMegaPrefab;
     RoomModifierType roomModifier = RoomModifierType.None;
     int bootLoopWavesRemaining;
@@ -113,6 +125,23 @@ public class RoomEncounter : MonoBehaviour
     {
         shieldSpawnChance = Mathf.Clamp01(chance);
         shieldHealth = Mathf.Max(0.1f, health);
+    }
+
+    public void SetEncounterDepth(int depth)
+    {
+        encounterDepth = Mathf.Max(0, depth);
+    }
+
+    public void SetDepthThreatMixSettings(
+        bool enabled,
+        int fullDepth,
+        float easyExponent,
+        float hardExponent)
+    {
+        scaleEnemyMixByDepth = enabled;
+        enemyMixFullDepth = Mathf.Max(1, fullDepth);
+        easyThreatExponent = easyExponent;
+        hardThreatExponent = hardExponent;
     }
 
     public void SetSpawnCount(int count)
@@ -172,6 +201,47 @@ public class RoomEncounter : MonoBehaviour
         healthPickupPrefab = null;
         healthPickupHealAmount = 0f;
         pendingHealthPickupDrop = false;
+    }
+
+    public void ConfigureUsbDashPickupDrop(GameObject prefab)
+    {
+        usbDashPickupPrefab = prefab;
+        pendingUsbDashDrop = prefab != null;
+    }
+
+    public void ClearUsbDashPickupDrop()
+    {
+        usbDashPickupPrefab = null;
+        pendingUsbDashDrop = false;
+    }
+
+    public void ConfigureGoatDashPickupDrop(GameObject prefab)
+    {
+        goatDashPickupPrefab = prefab;
+        pendingGoatDashDrop = prefab != null;
+    }
+
+    public void ClearGoatDashPickupDrop()
+    {
+        goatDashPickupPrefab = null;
+        pendingGoatDashDrop = false;
+    }
+
+    public void ConfigureWeaponPickupDrop(GameObject prefab, int weaponIndex)
+    {
+        if (prefab == null)
+            return;
+
+        pendingWeaponPickupDrops.Add(new PendingWeaponPickupDrop
+        {
+            Prefab = prefab,
+            WeaponIndex = Mathf.Max(0, weaponIndex)
+        });
+    }
+
+    public void ClearWeaponPickupDrops()
+    {
+        pendingWeaponPickupDrops.Clear();
     }
 
     void Awake()
@@ -490,7 +560,38 @@ public class RoomEncounter : MonoBehaviour
         if (eligiblePrefabs.Count == 0)
             return null;
 
-        return eligiblePrefabs[Random.Range(0, eligiblePrefabs.Count)];
+        if (!scaleEnemyMixByDepth || eligiblePrefabs.Count == 1)
+            return eligiblePrefabs[Random.Range(0, eligiblePrefabs.Count)];
+
+        float depth01 = Mathf.Clamp01(encounterDepth / (float)Mathf.Max(1, enemyMixFullDepth));
+        float exponent = Mathf.Lerp(easyThreatExponent, hardThreatExponent, depth01);
+
+        float totalWeight = 0f;
+        for (int i = 0; i < eligiblePrefabs.Count; i++)
+            totalWeight += GetThreatWeight(eligiblePrefabs[i], exponent);
+
+        if (totalWeight <= 0f)
+            return eligiblePrefabs[Random.Range(0, eligiblePrefabs.Count)];
+
+        float roll = Random.value * totalWeight;
+        float cumulative = 0f;
+        for (int i = 0; i < eligiblePrefabs.Count; i++)
+        {
+            cumulative += GetThreatWeight(eligiblePrefabs[i], exponent);
+            if (roll <= cumulative)
+                return eligiblePrefabs[i];
+        }
+
+        return eligiblePrefabs[eligiblePrefabs.Count - 1];
+    }
+
+    static float GetThreatWeight(GameObject prefab, float exponent)
+    {
+        EnemyAI ai = GetPrefabAi(prefab);
+        float threat = ai != null ? ai.ThreatRating : 1f;
+        threat = Mathf.Max(1f, threat);
+        float weight = Mathf.Pow(threat, exponent);
+        return Mathf.Max(0.0001f, weight);
     }
 
     bool CanSpawnBuffPrefab(
@@ -731,7 +832,93 @@ public class RoomEncounter : MonoBehaviour
         EndPacketLossEffect();
         SetDoorsLocked(false);
         TrySpawnHealthPickup();
+        TrySpawnUsbDashPickup();
+        TrySpawnGoatDashPickup();
+        TrySpawnWeaponPickups();
         Cleared?.Invoke();
+    }
+
+    void TrySpawnUsbDashPickup()
+    {
+        if (!pendingUsbDashDrop || usbDashPickupPrefab == null)
+            return;
+
+        pendingUsbDashDrop = false;
+
+        PlayerController player = PlayerController.Instance != null
+            ? PlayerController.Instance
+            : FindAnyObjectByType<PlayerController>();
+        if (player != null && player.HasUsbDash)
+            return;
+
+        if (!TryChooseHealthPickupPosition(out Vector3 spawnPosition))
+        {
+            Debug.LogWarning(
+                $"Could not find a valid NavMesh position for a USB Dash pickup in {room.name}.",
+                this);
+            return;
+        }
+
+        Instantiate(usbDashPickupPrefab, spawnPosition, Quaternion.identity);
+    }
+
+    void TrySpawnGoatDashPickup()
+    {
+        if (!pendingGoatDashDrop || goatDashPickupPrefab == null)
+            return;
+
+        pendingGoatDashDrop = false;
+
+        PlayerController player = PlayerController.Instance != null
+            ? PlayerController.Instance
+            : FindAnyObjectByType<PlayerController>();
+        if (player != null && player.HasGoatDash)
+            return;
+
+        if (!TryChooseHealthPickupPosition(out Vector3 spawnPosition))
+        {
+            Debug.LogWarning(
+                $"Could not find a valid NavMesh position for a Goat Dash pickup in {room.name}.",
+                this);
+            return;
+        }
+
+        Instantiate(goatDashPickupPrefab, spawnPosition, Quaternion.identity);
+    }
+
+    void TrySpawnWeaponPickups()
+    {
+        if (pendingWeaponPickupDrops.Count == 0)
+            return;
+
+        PlayerController player = PlayerController.Instance != null
+            ? PlayerController.Instance
+            : FindAnyObjectByType<PlayerController>();
+
+        for (int i = 0; i < pendingWeaponPickupDrops.Count; i++)
+        {
+            PendingWeaponPickupDrop drop = pendingWeaponPickupDrops[i];
+            if (drop.Prefab == null)
+                continue;
+
+            if (player != null && player.HasWeapon(drop.WeaponIndex))
+                continue;
+
+            if (!TryChooseHealthPickupPosition(out Vector3 spawnPosition))
+            {
+                Debug.LogWarning(
+                    $"Could not find a valid NavMesh position for a weapon pickup in {room.name}.",
+                    this);
+                continue;
+            }
+
+            GameObject instance = Instantiate(drop.Prefab, spawnPosition, Quaternion.identity);
+            WeaponPickup pickup = instance.GetComponent<WeaponPickup>();
+            if (pickup != null)
+                pickup.Configure(drop.WeaponIndex);
+        }
+
+        pendingWeaponPickupDrops.Clear();
     }
 
     void BeginPacketLossEffect()
@@ -766,5 +953,11 @@ public class RoomEncounter : MonoBehaviour
             socket.SetLocked(locked);
             socket.Connected?.SetLocked(locked);
         }
+    }
+
+    struct PendingWeaponPickupDrop
+    {
+        public GameObject Prefab;
+        public int WeaponIndex;
     }
 }

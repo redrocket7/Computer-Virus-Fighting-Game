@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -7,6 +8,10 @@ using UnityEngine;
 /// </summary>
 public class FirewallTrap : MonoBehaviour
 {
+    static readonly List<FirewallTrap> ActiveFirewalls = new List<FirewallTrap>();
+
+    public static IReadOnlyList<FirewallTrap> Active => ActiveFirewalls;
+
     [Header("Timing")]
     [SerializeField] float cycleInterval = 10f;
     [SerializeField] bool startsClosed = true;
@@ -22,6 +27,8 @@ public class FirewallTrap : MonoBehaviour
     bool isClosed;
     Vector3 closedLocalPosition;
     Vector3 openLocalPosition;
+
+    public Collider BlockingCollider => blockingCollider;
 
     void Awake()
     {
@@ -42,6 +49,9 @@ public class FirewallTrap : MonoBehaviour
 
     void OnEnable()
     {
+        if (!ActiveFirewalls.Contains(this))
+            ActiveFirewalls.Add(this);
+
         CachePositions();
 
         if (cycleRoutine != null)
@@ -54,6 +64,8 @@ public class FirewallTrap : MonoBehaviour
 
     void OnDisable()
     {
+        ActiveFirewalls.Remove(this);
+
         if (cycleRoutine != null)
         {
             StopCoroutine(cycleRoutine);
