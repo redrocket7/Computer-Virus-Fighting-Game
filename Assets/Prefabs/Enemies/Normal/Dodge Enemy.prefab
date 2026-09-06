@@ -680,6 +680,7 @@ MonoBehaviour:
   lookAheadMinSpeed: 0.15
   bodyMesh: {fileID: 0}
   tiltSmoothing: 6
+  tiltUpdateInterval: 0.1
 --- !u!114 &2525807994708376942
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -695,16 +696,19 @@ MonoBehaviour:
   player: {fileID: 0}
   pathRefreshInterval: 0.2
   maxHealth: 2
+  difficulty: 1
   contactDamage: 1
   attackRange: 2
   attackInterval: 1
   deathEffectPrefab: {fileID: 512345678901234501, guid: b70891a2b3c4d5e6f708901a2b3c4d50, type: 3}
-  detectRange: 18
-  threatRadius: 2.4
+  deathEffectHeight: 0.35
+  detectRange: 20
+  threatRadius: 3
   dodgeDistance: 8
-  dodgeDuration: 1.25
+  dodgeDuration: 1.1
   dodgeCooldown: 0.4
   dodgeSpeed: 15
+  threatScanInterval: 0.05
 --- !u!65 &7806898481211741642
 BoxCollider:
   m_ObjectHideFlags: 0

@@ -1,22 +1,30 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// Short-lived visual trail segment left by a USB Dash.
 /// </summary>
 public class UsbDashTrail : MonoBehaviour
 {
+    static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    static readonly int ColorId = Shader.PropertyToID("_Color");
+    static Shader cachedShader;
+    static Material sharedTrailMaterial;
+    static MaterialPropertyBlock propertyBlock;
+    static bool sharedMaterialIsUrp;
+
     [SerializeField] float radius = 0.85f;
     [SerializeField] float height = 1.2f;
     [SerializeField] float lifetime = 0.35f;
     [SerializeField] Color trailColor = new Color(0.35f, 0.85f, 1f, 0.55f);
 
     float lifeRemaining;
-    Material runtimeMaterial;
+    MeshRenderer meshRenderer;
 
     public static UsbDashTrail Spawn(
         Vector3 position,
         Vector3 forward,
-        float trailLifetime,
+        float trailDuration,
         float trailRadius)
     {
         var go = new GameObject("USB Dash Trail");
@@ -25,14 +33,14 @@ public class UsbDashTrail : MonoBehaviour
             go.transform.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
 
         UsbDashTrail trail = go.AddComponent<UsbDashTrail>();
-        trail.Configure(trailLifetime, trailRadius);
+        trail.Configure(trailDuration, trailRadius);
         trail.BuildVisual();
         return trail;
     }
 
-    public void Configure(float trailLifetime, float trailRadius)
+    public void Configure(float trailDuration, float trailRadius)
     {
-        lifetime = Mathf.Max(0.05f, trailLifetime);
+        lifetime = Mathf.Max(0.05f, trailDuration);
         radius = Mathf.Max(0.15f, trailRadius);
         lifeRemaining = lifetime;
     }
@@ -42,12 +50,10 @@ public class UsbDashTrail : MonoBehaviour
         var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
         visual.name = "Visual";
         visual.transform.SetParent(transform, false);
-        // Upright capsule, slightly stretched along the dash direction.
         visual.transform.localPosition = Vector3.up * (height * 0.45f);
         visual.transform.localRotation = Quaternion.identity;
         visual.transform.localScale = new Vector3(radius * 0.95f, height * 0.42f, radius * 1.35f);
 
-        // CreatePrimitive adds a collider; Destroy() is deferred one frame and will bump the player.
         Collider visualCollider = visual.GetComponent<Collider>();
         if (visualCollider != null)
         {
@@ -55,63 +61,75 @@ public class UsbDashTrail : MonoBehaviour
             Destroy(visualCollider);
         }
 
-        var renderer = visual.GetComponent<MeshRenderer>();
-        if (renderer != null)
-        {
-            runtimeMaterial = CreateTrailMaterial(trailColor);
-            renderer.sharedMaterial = runtimeMaterial;
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-        }
+        meshRenderer = visual.GetComponent<MeshRenderer>();
+        if (meshRenderer == null)
+            return;
+
+        EnsureSharedMaterial();
+        meshRenderer.sharedMaterial = sharedTrailMaterial;
+        meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+        meshRenderer.receiveShadows = false;
+        ApplyColor(trailColor);
     }
 
     void Update()
     {
         lifeRemaining -= Time.deltaTime;
 
-        if (runtimeMaterial != null)
+        if (meshRenderer != null)
         {
             float alpha = Mathf.Clamp01(lifeRemaining / Mathf.Max(0.05f, lifetime)) * trailColor.a;
             Color color = trailColor;
             color.a = alpha;
-            if (runtimeMaterial.HasProperty("_BaseColor"))
-                runtimeMaterial.SetColor("_BaseColor", color);
-            if (runtimeMaterial.HasProperty("_Color"))
-                runtimeMaterial.SetColor("_Color", color);
+            ApplyColor(color);
         }
 
         if (lifeRemaining <= 0f)
             Destroy(gameObject);
     }
 
-    void OnDestroy()
+    void ApplyColor(Color color)
     {
-        if (runtimeMaterial != null)
-            Destroy(runtimeMaterial);
+        if (meshRenderer == null || sharedTrailMaterial == null)
+            return;
+
+        if (propertyBlock == null)
+            propertyBlock = new MaterialPropertyBlock();
+
+        meshRenderer.GetPropertyBlock(propertyBlock);
+        if (sharedMaterialIsUrp)
+            propertyBlock.SetColor(BaseColorId, color);
+        propertyBlock.SetColor(ColorId, color);
+        meshRenderer.SetPropertyBlock(propertyBlock);
     }
 
-    static Material CreateTrailMaterial(Color color)
+    static void EnsureSharedMaterial()
     {
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-            ?? Shader.Find("Unlit/Color");
-        var material = new Material(shader)
-        {
-            name = "UsbDashTrailRuntime",
-            renderQueue = 3000
-        };
+        if (sharedTrailMaterial != null)
+            return;
 
-        if (shader != null && shader.name.Contains("Universal Render Pipeline"))
+        if (cachedShader == null)
         {
-            material.SetFloat("_Surface", 1f);
-            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            material.SetFloat("_ZWrite", 0f);
-            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            material.SetOverrideTag("RenderType", "Transparent");
+            cachedShader = Shader.Find("Universal Render Pipeline/Unlit")
+                ?? Shader.Find("Unlit/Color");
         }
 
-        material.SetColor("_BaseColor", color);
-        material.SetColor("_Color", color);
-        return material;
+        sharedTrailMaterial = new Material(cachedShader)
+        {
+            name = "UsbDashTrailShared",
+            renderQueue = 3000,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+
+        sharedMaterialIsUrp = cachedShader != null && cachedShader.name.Contains("Universal Render Pipeline");
+        if (sharedMaterialIsUrp)
+        {
+            sharedTrailMaterial.SetFloat("_Surface", 1f);
+            sharedTrailMaterial.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            sharedTrailMaterial.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            sharedTrailMaterial.SetFloat("_ZWrite", 0f);
+            sharedTrailMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            sharedTrailMaterial.SetOverrideTag("RenderType", "Transparent");
+        }
     }
 }

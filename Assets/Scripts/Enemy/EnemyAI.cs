@@ -17,8 +17,9 @@ public class EnemyAI : MonoBehaviour, IDamageable
     [SerializeField] float maxHealth = 1f;
 
     [Header("Spawn Difficulty")]
-    [Tooltip("Higher = harder for depth-weighted spawns. 0 = derive from Max Health.")]
-    [SerializeField] int threatRating;
+    [Tooltip("1–5 difficulty used for depth-weighted dungeon spawns. 0 = treat as difficulty 1.")]
+    [SerializeField, UnityEngine.Serialization.FormerlySerializedAs("threatRating")]
+    int difficulty;
 
     [Header("Contact Damage")]
     [Tooltip("Damage dealt to the player on touch. Set to 0 for enemies that attack another way.")]
@@ -56,9 +57,9 @@ public class EnemyAI : MonoBehaviour, IDamageable
     public float DamageMultiplier => damageMultiplier;
     public float CurrentHealth => currentHealth;
     public float MaxHealth => maxHealth;
-    public int ThreatRating => threatRating > 0
-        ? threatRating
-        : Mathf.Max(1, Mathf.RoundToInt(maxHealth));
+    public int Difficulty => difficulty > 0 ? difficulty : 1;
+    /// <summary>Alias used by depth-weighted spawn mix (same as Difficulty).</summary>
+    public int ThreatRating => Difficulty;
     public bool IsDamaged => currentHealth > 0f && currentHealth < maxHealth - 0.001f;
     public bool IsAlive => currentHealth > 0f;
     public RoomEncounter BoundEncounter => boundEncounter;

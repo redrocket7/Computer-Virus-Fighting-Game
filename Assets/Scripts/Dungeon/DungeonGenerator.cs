@@ -76,22 +76,22 @@ public class DungeonGenerator : MonoBehaviour
     [Min(0)]
     [Tooltip("Hard cap on spawn count after depth scaling. 0 = no cap.")]
     [SerializeField] int maxSpawnCount = 0;
-    [Tooltip("Bias enemy picks toward harder foes deeper in the dungeon.")]
+    [Tooltip("Bias enemy picks toward higher Difficulty deeper in the dungeon.")]
     [SerializeField] bool scaleEnemyMixByDepth = true;
     [Min(1)]
-    [Tooltip("Door-hops from start where the mix fully favors hard enemies.")]
+    [Tooltip("Door-hops from start where the mix fully favors high-Difficulty enemies.")]
     [SerializeField] int enemyMixFullDepth = 8;
-    [Tooltip("Threat weight exponent near the start (negative favors easy / low-threat).")]
+    [Tooltip("Difficulty weight exponent near the start (negative favors easy).")]
     [SerializeField] float easyThreatExponent = -1.25f;
-    [Tooltip("Threat weight exponent at full depth (positive favors hard / high-threat).")]
+    [Tooltip("Difficulty weight exponent at full depth (positive favors hard).")]
     [SerializeField] float hardThreatExponent = 1.4f;
 
     [Header("Room Modifiers")]
     [Range(0f, 1f)]
-    [Tooltip("Chance each combat room becomes a RAID Array (guaranteed Repair or Overclock).")]
+    [Tooltip("Base chance each combat room becomes a RAID Array (guaranteed Repair or Overclock).")]
     [SerializeField] float raidArrayChance = 0.25f;
     [Range(0f, 1f)]
-    [Tooltip("Chance each combat room becomes a Boot Loop (another enemy wave after the first pack dies).")]
+    [Tooltip("Base chance each combat room becomes a Boot Loop (another enemy wave after the first pack dies).")]
     [SerializeField] float bootLoopChance = 0.2f;
     [Min(1)]
     [Tooltip("How many extra waves spawn after the first clear in a Boot Loop room.")]
@@ -103,13 +103,24 @@ public class DungeonGenerator : MonoBehaviour
     [Tooltip("Combat holdoff for enemies spawned by a Boot Loop reinforcement wave.")]
     [SerializeField] float bootLoopAttackDelay = 1.25f;
     [Range(0f, 1f)]
-    [Tooltip("Chance each combat room becomes Packet Loss (player shots may fizzle).")]
+    [Tooltip("Base chance each combat room becomes Packet Loss (player shots may fizzle).")]
     [SerializeField] float packetLossChance = 0.2f;
     [Range(0f, 1f)]
     [Tooltip("Chance each player shot fizzles in a Packet Loss room.")]
     [SerializeField] float packetLossFizzleChance = 0.35f;
     [Tooltip("When enabled, the start room never rolls a room modifier.")]
     [SerializeField] bool excludeStartRoomForModifiers = true;
+    [Tooltip("Scale modifier chances by door-hops from the start (farther = more likely).")]
+    [SerializeField] bool scaleModifiersByDepth = true;
+    [Min(1)]
+    [Tooltip("Door-hops from start where modifier chance reaches the far multiplier.")]
+    [SerializeField] int modifierFullDepth = 8;
+    [Min(0f)]
+    [Tooltip("Multiplier on base modifier chances near the start.")]
+    [SerializeField] float nearModifierChanceMultiplier = 0.35f;
+    [Min(0f)]
+    [Tooltip("Multiplier on base modifier chances at full depth.")]
+    [SerializeField] float farModifierChanceMultiplier = 1.5f;
 
     [Header("Health Pickups")]
     [SerializeField] GameObject healthPickupPrefab;
@@ -210,10 +221,11 @@ public class DungeonGenerator : MonoBehaviour
         }
 
         SealUnusedExits();
-        ApplyDepthSpawnScaling();
-        ApplyDepthEnemyMix();
-        AssignRoomModifiers();
-        AssignMegaEnemy();
+        Dictionary<RoomDefinition, int> depthByRoom = BuildRoomDepthMap();
+        ApplyDepthSpawnScaling(depthByRoom);
+        ApplyDepthEnemyMix(depthByRoom);
+        AssignRoomModifiers(depthByRoom);
+        AssignMegaEnemy(depthByRoom);
         BuildNavigation();
         AssignHealthPickups();
         AssignUsbDashPickup();
@@ -272,7 +284,7 @@ public class DungeonGenerator : MonoBehaviour
         PassageFogCover.RefreshAll();
     }
 
-    void AssignMegaEnemy()
+    void AssignMegaEnemy(Dictionary<RoomDefinition, int> depthByRoom)
     {
         if (megaEnemyPrefabs == null || megaEnemyPrefabs.Length == 0)
         {
@@ -291,7 +303,7 @@ public class DungeonGenerator : MonoBehaviour
             return;
         }
 
-        RoomDefinition host = ChooseMegaHostRoom();
+        RoomDefinition host = ChooseMegaHostRoom(depthByRoom);
         if (host == null)
         {
             Debug.LogWarning("Mega spawn skipped: no eligible combat room found.", this);
@@ -331,12 +343,14 @@ public class DungeonGenerator : MonoBehaviour
         return null;
     }
 
-    RoomDefinition ChooseMegaHostRoom()
+    RoomDefinition ChooseMegaHostRoom(Dictionary<RoomDefinition, int> depthByRoom)
     {
         if (placedRooms.Count == 0)
             return null;
 
-        Dictionary<RoomDefinition, int> depthByRoom = BuildRoomDepthMap();
+        if (depthByRoom == null)
+            depthByRoom = BuildRoomDepthMap();
+
         RoomDefinition start = placedRooms[0];
 
         int minDepth = Mathf.Max(1, megaMinimumDepth);
@@ -382,12 +396,11 @@ public class DungeonGenerator : MonoBehaviour
         return pool[Random.Range(0, pool.Count)];
     }
 
-    void ApplyDepthSpawnScaling()
+    void ApplyDepthSpawnScaling(Dictionary<RoomDefinition, int> depthByRoom)
     {
-        if (!scaleSpawnCountByDepth || extraEnemiesPerDepth <= 0)
+        if (!scaleSpawnCountByDepth || extraEnemiesPerDepth <= 0 || depthByRoom == null)
             return;
 
-        Dictionary<RoomDefinition, int> depthByRoom = BuildRoomDepthMap();
         for (int i = 0; i < placedRooms.Count; i++)
         {
             RoomDefinition room = placedRooms[i];
@@ -409,9 +422,11 @@ public class DungeonGenerator : MonoBehaviour
         }
     }
 
-    void ApplyDepthEnemyMix()
+    void ApplyDepthEnemyMix(Dictionary<RoomDefinition, int> depthByRoom)
     {
-        Dictionary<RoomDefinition, int> depthByRoom = BuildRoomDepthMap();
+        if (depthByRoom == null)
+            return;
+
         int referenceDepth = Mathf.Max(1, enemyMixFullDepth);
 
         for (int i = 0; i < placedRooms.Count; i++)
@@ -434,7 +449,7 @@ public class DungeonGenerator : MonoBehaviour
         }
     }
 
-    void AssignRoomModifiers()
+    void AssignRoomModifiers(Dictionary<RoomDefinition, int> depthByRoom)
     {
         float raidChance = Mathf.Clamp01(raidArrayChance);
         float loopChance = Mathf.Clamp01(bootLoopChance);
@@ -445,6 +460,7 @@ public class DungeonGenerator : MonoBehaviour
         bool hasSupports = EnemyPoolHasSupportPrefab();
         RoomDefinition start = placedRooms.Count > 0 ? placedRooms[0] : null;
         var candidates = new List<RoomModifierType>(3);
+        int fullDepth = Mathf.Max(1, modifierFullDepth);
 
         for (int i = 0; i < placedRooms.Count; i++)
         {
@@ -462,17 +478,32 @@ public class DungeonGenerator : MonoBehaviour
             if (encounter.RoomModifier != RoomModifierType.None)
                 continue;
 
+            float chanceScale = 1f;
+            if (scaleModifiersByDepth)
+            {
+                int depth = 0;
+                if (depthByRoom != null)
+                    depthByRoom.TryGetValue(room, out depth);
+
+                float depth01 = Mathf.Clamp01(depth / (float)fullDepth);
+                chanceScale = Mathf.Lerp(nearModifierChanceMultiplier, farModifierChanceMultiplier, depth01);
+            }
+
+            float scaledRaid = Mathf.Clamp01(raidChance * chanceScale);
+            float scaledLoop = Mathf.Clamp01(loopChance * chanceScale);
+            float scaledPacket = Mathf.Clamp01(packetChance * chanceScale);
+
             candidates.Clear();
-            if (raidChance > 0f && Random.value <= raidChance)
+            if (scaledRaid > 0f && Random.value <= scaledRaid)
             {
                 if (hasSupports)
                     candidates.Add(RoomModifierType.RaidArray);
             }
 
-            if (loopChance > 0f && Random.value <= loopChance)
+            if (scaledLoop > 0f && Random.value <= scaledLoop)
                 candidates.Add(RoomModifierType.BootLoop);
 
-            if (packetChance > 0f && Random.value <= packetChance)
+            if (scaledPacket > 0f && Random.value <= scaledPacket)
                 candidates.Add(RoomModifierType.PacketLoss);
 
             if (candidates.Count == 0)

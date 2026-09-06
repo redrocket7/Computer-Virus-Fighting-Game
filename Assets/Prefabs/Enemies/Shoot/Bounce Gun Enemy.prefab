@@ -587,6 +587,7 @@ MonoBehaviour:
   player: {fileID: 0}
   pathRefreshInterval: 0.2
   maxHealth: 4
+  difficulty: 3
   contactDamage: 1
   attackRange: 3
   attackInterval: 1
@@ -606,10 +607,10 @@ MonoBehaviour:
     m_Bits: 4294967295
   recoilDistance: 0.7
   recoilRecoverTime: 0.2
-  detectRange: 18
-  threatRadius: 2.5
+  detectRange: 20
+  threatRadius: 3
   dodgeDistance: 8
-  dodgeDuration: 1.25
+  dodgeDuration: 1.1
   dodgeCooldown: 0.4
   dodgeSpeed: 10
   threatScanInterval: 0.05

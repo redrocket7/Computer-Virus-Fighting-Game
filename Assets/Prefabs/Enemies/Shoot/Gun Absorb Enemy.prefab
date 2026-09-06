@@ -580,6 +580,7 @@ MonoBehaviour:
   player: {fileID: 0}
   pathRefreshInterval: 0.2
   maxHealth: 3
+  difficulty: 5
   contactDamage: 1
   attackRange: 2
   attackInterval: 1

@@ -83,6 +83,12 @@ public class RoomEncounter : MonoBehaviour
     RoomDefinition room;
     readonly HashSet<EnemyAI> livingEnemies = new HashSet<EnemyAI>();
     readonly List<BootLoopSpawnMarker> activeSpawnMarkers = new List<BootLoopSpawnMarker>();
+    readonly Dictionary<GameObject, EnemyAI> prefabAiCache = new Dictionary<GameObject, EnemyAI>();
+    readonly List<GameObject> eligiblePrefabBuffer = new List<GameObject>(32);
+    readonly List<float> spawnWeightBuffer = new List<float>(32);
+    readonly List<Vector3> occupiedSpawnBuffer = new List<Vector3>(16);
+    readonly List<PlannedSpawn> plannedSpawnBuffer = new List<PlannedSpawn>(16);
+    float mixExponent;
     bool started;
     bool cleared;
 
@@ -107,6 +113,7 @@ public class RoomEncounter : MonoBehaviour
     public void SetEnemyPrefabs(GameObject[] prefabs)
     {
         enemyPrefabs = prefabs;
+        prefabAiCache.Clear();
     }
 
     public void SetAttackDelay(float seconds)
@@ -130,6 +137,7 @@ public class RoomEncounter : MonoBehaviour
     public void SetEncounterDepth(int depth)
     {
         encounterDepth = Mathf.Max(0, depth);
+        RefreshMixExponent();
     }
 
     public void SetDepthThreatMixSettings(
@@ -142,6 +150,13 @@ public class RoomEncounter : MonoBehaviour
         enemyMixFullDepth = Mathf.Max(1, fullDepth);
         easyThreatExponent = easyExponent;
         hardThreatExponent = hardExponent;
+        RefreshMixExponent();
+    }
+
+    void RefreshMixExponent()
+    {
+        float depth01 = Mathf.Clamp01(encounterDepth / (float)Mathf.Max(1, enemyMixFullDepth));
+        mixExponent = Mathf.Lerp(easyThreatExponent, hardThreatExponent, depth01);
     }
 
     public void SetSpawnCount(int count)
@@ -322,7 +337,7 @@ public class RoomEncounter : MonoBehaviour
 
     IEnumerator SpawnBootLoopWaveRoutine()
     {
-        List<PlannedSpawn> planned = PlanWaveSpawns(includeBonuses: false);
+        List<PlannedSpawn> planned = new List<PlannedSpawn>(PlanWaveSpawns(includeBonuses: false));
         if (planned.Count == 0)
         {
             bootLoopWavePending = false;
@@ -361,9 +376,9 @@ public class RoomEncounter : MonoBehaviour
 
     List<PlannedSpawn> PlanWaveSpawns(bool includeBonuses)
     {
-        var planned = new List<PlannedSpawn>();
+        plannedSpawnBuffer.Clear();
         if (room == null)
-            return planned;
+            return plannedSpawnBuffer;
 
         bool hasNormalPool = enemyPrefabs != null && enemyPrefabs.Length > 0 && spawnCount > 0;
         bool hasMega = includeBonuses && bonusMegaPrefab != null;
@@ -372,45 +387,41 @@ public class RoomEncounter : MonoBehaviour
                               enemyPrefabs != null &&
                               enemyPrefabs.Length > 0;
         if (!hasNormalPool && !hasMega && !hasRaidSupport)
-            return planned;
+            return plannedSpawnBuffer;
 
-        var occupiedPositions = new List<Vector3>(spawnCount + (hasMega ? 1 : 0) + 1);
-        var eligiblePrefabs = new List<GameObject>(hasNormalPool ? enemyPrefabs.Length : 0);
-        PlayerController player = PlayerController.Instance != null
-            ? PlayerController.Instance
-            : FindAnyObjectByType<PlayerController>();
+        occupiedSpawnBuffer.Clear();
+        PlayerController player = PlayerController.Instance;
         Transform playerTransform = player != null ? player.transform : null;
         int spawnedOverclock = 0;
         int spawnedRepair = 0;
         int spawnedShielder = 0;
 
         if (hasMega)
-            TryPlanSpawn(bonusMegaPrefab, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+            TryPlanSpawn(bonusMegaPrefab, occupiedSpawnBuffer, playerTransform, plannedSpawnBuffer, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
 
         if (hasRaidSupport)
         {
             GameObject support = ChooseRaidSupportPrefab(spawnedOverclock, spawnedRepair, spawnedShielder);
             if (support != null)
-                TryPlanSpawn(support, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+                TryPlanSpawn(support, occupiedSpawnBuffer, playerTransform, plannedSpawnBuffer, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
         }
 
         if (!hasNormalPool)
-            return planned;
+            return plannedSpawnBuffer;
 
         for (int i = 0; i < spawnCount; i++)
         {
             GameObject prefab = ChooseEnemyPrefab(
-                eligiblePrefabs,
                 spawnedOverclock,
                 spawnedRepair,
                 spawnedShielder);
             if (prefab == null)
                 continue;
 
-            TryPlanSpawn(prefab, occupiedPositions, playerTransform, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+            TryPlanSpawn(prefab, occupiedSpawnBuffer, playerTransform, plannedSpawnBuffer, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
         }
 
-        return planned;
+        return plannedSpawnBuffer;
     }
 
     void TryPlanSpawn(
@@ -539,12 +550,16 @@ public class RoomEncounter : MonoBehaviour
     }
 
     GameObject ChooseEnemyPrefab(
-        List<GameObject> eligiblePrefabs,
         int spawnedOverclock,
         int spawnedRepair,
         int spawnedShielder)
     {
-        eligiblePrefabs.Clear();
+        eligiblePrefabBuffer.Clear();
+        spawnWeightBuffer.Clear();
+
+        float totalWeight = 0f;
+        bool weighted = scaleEnemyMixByDepth;
+
         for (int i = 0; i < enemyPrefabs.Length; i++)
         {
             GameObject prefab = enemyPrefabs[i];
@@ -554,44 +569,42 @@ public class RoomEncounter : MonoBehaviour
             if (!CanSpawnBuffPrefab(prefab, spawnedOverclock, spawnedRepair, spawnedShielder))
                 continue;
 
-            eligiblePrefabs.Add(prefab);
+            eligiblePrefabBuffer.Add(prefab);
+            if (!weighted)
+                continue;
+
+            float weight = GetThreatWeight(prefab, mixExponent);
+            spawnWeightBuffer.Add(weight);
+            totalWeight += weight;
         }
 
-        if (eligiblePrefabs.Count == 0)
+        int count = eligiblePrefabBuffer.Count;
+        if (count == 0)
             return null;
 
-        if (!scaleEnemyMixByDepth || eligiblePrefabs.Count == 1)
-            return eligiblePrefabs[Random.Range(0, eligiblePrefabs.Count)];
-
-        float depth01 = Mathf.Clamp01(encounterDepth / (float)Mathf.Max(1, enemyMixFullDepth));
-        float exponent = Mathf.Lerp(easyThreatExponent, hardThreatExponent, depth01);
-
-        float totalWeight = 0f;
-        for (int i = 0; i < eligiblePrefabs.Count; i++)
-            totalWeight += GetThreatWeight(eligiblePrefabs[i], exponent);
-
-        if (totalWeight <= 0f)
-            return eligiblePrefabs[Random.Range(0, eligiblePrefabs.Count)];
+        if (!weighted || count == 1 || totalWeight <= 0f)
+            return eligiblePrefabBuffer[Random.Range(0, count)];
 
         float roll = Random.value * totalWeight;
         float cumulative = 0f;
-        for (int i = 0; i < eligiblePrefabs.Count; i++)
+        for (int i = 0; i < count; i++)
         {
-            cumulative += GetThreatWeight(eligiblePrefabs[i], exponent);
+            cumulative += spawnWeightBuffer[i];
             if (roll <= cumulative)
-                return eligiblePrefabs[i];
+                return eligiblePrefabBuffer[i];
         }
 
-        return eligiblePrefabs[eligiblePrefabs.Count - 1];
+        return eligiblePrefabBuffer[count - 1];
     }
 
-    static float GetThreatWeight(GameObject prefab, float exponent)
+    float GetThreatWeight(GameObject prefab, float exponent)
     {
         EnemyAI ai = GetPrefabAi(prefab);
-        float threat = ai != null ? ai.ThreatRating : 1f;
-        threat = Mathf.Max(1f, threat);
+        float threat = ai != null ? ai.Difficulty : 1f;
+        if (threat < 1f)
+            threat = 1f;
         float weight = Mathf.Pow(threat, exponent);
-        return Mathf.Max(0.0001f, weight);
+        return weight > 0.0001f ? weight : 0.0001f;
     }
 
     bool CanSpawnBuffPrefab(
@@ -625,12 +638,17 @@ public class RoomEncounter : MonoBehaviour
             spawnedShielder++;
     }
 
-    static EnemyAI GetPrefabAi(GameObject prefab)
+    EnemyAI GetPrefabAi(GameObject prefab)
     {
         if (prefab == null)
             return null;
 
-        return prefab.GetComponent<EnemyAI>() ?? prefab.GetComponentInChildren<EnemyAI>();
+        if (prefabAiCache.TryGetValue(prefab, out EnemyAI cached))
+            return cached;
+
+        EnemyAI ai = prefab.GetComponent<EnemyAI>() ?? prefab.GetComponentInChildren<EnemyAI>();
+        prefabAiCache[prefab] = ai;
+        return ai;
     }
 
     bool TryChooseRandomSpawnPosition(

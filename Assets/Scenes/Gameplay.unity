@@ -568,6 +568,10 @@ MonoBehaviour:
   packetLossChance: 0.2
   packetLossFizzleChance: 0.35
   excludeStartRoomForModifiers: 1
+  scaleModifiersByDepth: 1
+  modifierFullDepth: 8
+  nearModifierChanceMultiplier: 0.35
+  farModifierChanceMultiplier: 1.5
   healthPickupPrefab: {fileID: 8456123901746283011, guid: a1b2c3d4e5f6789012345678abcdef05, type: 3}
   healthPickupDropChance: 0.25
   healthPickupHealAmount: 2
@@ -592,7 +596,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   player: {fileID: 1288065130}
-  enableFogCover: 1
+  enableFogCover: 0
   fogCoverMaterial: {fileID: 2100000, guid: 80ff4075a157b754c9f065444bfbb63e, type: 2}
   fogCoverColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
   fogOverrideMaterialColor: 1
