@@ -33,6 +33,7 @@ public class PlayerHUD : MonoBehaviour
     Image healthFillImage;
     Text healthLabel;
     Text weaponLabel;
+    Text infectionReportLabel;
     GameObject gameOverRoot;
     Button restartButton;
     Font font;
@@ -177,7 +178,16 @@ public class PlayerHUD : MonoBehaviour
 
     void OnPlayerDied()
     {
+        RefreshInfectionReport();
         SetGameOverVisible(true);
+    }
+
+    void RefreshInfectionReport()
+    {
+        if (infectionReportLabel == null)
+            return;
+
+        infectionReportLabel.text = InfectionReport.FinalizeAndFormat();
     }
 
     void SetGameOverVisible(bool visible)
@@ -185,6 +195,9 @@ public class PlayerHUD : MonoBehaviour
         isGameOver = visible;
         if (gameOverRoot != null)
             gameOverRoot.SetActive(visible);
+
+        if (visible)
+            RefreshInfectionReport();
 
         if (!visible || restartButton == null)
             return;
@@ -210,6 +223,7 @@ public class PlayerHUD : MonoBehaviour
     static void CleanupTransientUi()
     {
         PacketLossCombatEffect.Reset();
+        InfectionReport.BeginRun();
 
         // EventSystems were previously DontDestroyOnLoad and could linger across restarts.
         // Tear them down so the next HUD creates a fresh one.
@@ -312,7 +326,7 @@ public class PlayerHUD : MonoBehaviour
 
     void BuildGameOverBanner()
     {
-        Image dim = CreateImage("Game Over", transform, new Color(0f, 0f, 0f, 0.65f));
+        Image dim = CreateImage("Game Over", transform, new Color(0f, 0f, 0f, 0.72f));
         dim.raycastTarget = true;
         RectTransform dimRect = dim.rectTransform;
         dimRect.anchorMin = Vector2.zero;
@@ -320,18 +334,42 @@ public class PlayerHUD : MonoBehaviour
         dimRect.offsetMin = Vector2.zero;
         dimRect.offsetMax = Vector2.zero;
 
-        Text label = CreateText("Message", dimRect, gameOverMessage, 96, gameOverColor, TextAnchor.MiddleCenter);
+        Text label = CreateText("Message", dimRect, gameOverMessage, 72, gameOverColor, TextAnchor.MiddleCenter);
         label.fontStyle = FontStyle.Bold;
         RectTransform labelRect = label.rectTransform;
-        labelRect.anchorMin = new Vector2(0f, 0.45f);
-        labelRect.anchorMax = new Vector2(1f, 0.75f);
+        labelRect.anchorMin = new Vector2(0f, 0.72f);
+        labelRect.anchorMax = new Vector2(1f, 0.9f);
         labelRect.offsetMin = Vector2.zero;
         labelRect.offsetMax = Vector2.zero;
 
+        Image reportPanel = CreateImage("Infection Report Panel", dimRect, new Color(0.05f, 0.07f, 0.08f, 0.92f));
+        RectTransform reportPanelRect = reportPanel.rectTransform;
+        reportPanelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        reportPanelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        reportPanelRect.pivot = new Vector2(0.5f, 0.5f);
+        reportPanelRect.sizeDelta = new Vector2(560f, 320f);
+        reportPanelRect.anchoredPosition = new Vector2(0f, 28f);
+
+        infectionReportLabel = CreateText(
+            "Infection Report",
+            reportPanelRect,
+            "INFECTION REPORT",
+            22,
+            new Color(0.78f, 0.95f, 0.82f),
+            TextAnchor.UpperLeft);
+        infectionReportLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+        infectionReportLabel.verticalOverflow = VerticalWrapMode.Overflow;
+        infectionReportLabel.lineSpacing = 1.05f;
+        RectTransform reportRect = infectionReportLabel.rectTransform;
+        reportRect.anchorMin = Vector2.zero;
+        reportRect.anchorMax = Vector2.one;
+        reportRect.offsetMin = new Vector2(28f, 18f);
+        reportRect.offsetMax = new Vector2(-28f, -22f);
+
         restartButton = CreateButton("Restart", dimRect, restartButtonLabel, restartButtonColor, restartLabelColor);
         RectTransform buttonRect = restartButton.GetComponent<RectTransform>();
-        buttonRect.anchorMin = new Vector2(0.5f, 0.28f);
-        buttonRect.anchorMax = new Vector2(0.5f, 0.28f);
+        buttonRect.anchorMin = new Vector2(0.5f, 0.18f);
+        buttonRect.anchorMax = new Vector2(0.5f, 0.18f);
         buttonRect.pivot = new Vector2(0.5f, 0.5f);
         buttonRect.sizeDelta = new Vector2(280f, 64f);
         buttonRect.anchoredPosition = Vector2.zero;
@@ -345,8 +383,8 @@ public class PlayerHUD : MonoBehaviour
             new Color(1f, 1f, 1f, 0.7f),
             TextAnchor.MiddleCenter);
         RectTransform hintRect = hint.rectTransform;
-        hintRect.anchorMin = new Vector2(0f, 0.14f);
-        hintRect.anchorMax = new Vector2(1f, 0.22f);
+        hintRect.anchorMin = new Vector2(0f, 0.06f);
+        hintRect.anchorMax = new Vector2(1f, 0.12f);
         hintRect.offsetMin = Vector2.zero;
         hintRect.offsetMax = Vector2.zero;
 

@@ -139,7 +139,7 @@ public class MortarShell : MonoBehaviour
             if (ownerAi != null)
                 scaledDamage = ownerAi.ScaleOutgoingDamage(explosionDamage);
 
-            target.TakeDamage(scaledDamage);
+            DelayedExplosionDamage.Apply(target, scaledDamage, blastPoint, explosionRadius);
         }
 
         Destroy(gameObject);

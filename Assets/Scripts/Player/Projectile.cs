@@ -278,7 +278,7 @@ public class Projectile : MonoBehaviour
             if (!firedByEnemy && target is PlayerController)
                 continue;
 
-            target.TakeDamage(outgoingExplosionDamage);
+            DelayedExplosionDamage.Apply(target, outgoingExplosionDamage, position, explosionRadius);
         }
 
         Destroy(gameObject);

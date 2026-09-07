@@ -110,6 +110,7 @@ public class RoomEncounter : MonoBehaviour
     public bool IsRevealed => cleared || !enabled;
     public int LivingEnemyCount => livingEnemies.Count;
     public RoomModifierType RoomModifier => roomModifier;
+    public int EncounterDepth => encounterDepth;
     public event System.Action Started;
     public event System.Action Cleared;
 
@@ -323,6 +324,7 @@ public class RoomEncounter : MonoBehaviour
 
         SetDoorsLocked(true);
         BeginPacketLossEffect();
+        InfectionReport.RecordRoomEntered(encounterDepth, roomModifier);
         Started?.Invoke();
         StartCoroutine(SpawnInitialWaveRoutine());
     }
@@ -1059,6 +1061,7 @@ public class RoomEncounter : MonoBehaviour
         TrySpawnUsbDashPickup();
         TrySpawnGoatDashPickup();
         TrySpawnWeaponPickups();
+        InfectionReport.RecordRoomCleared(encounterDepth, roomModifier);
         Cleared?.Invoke();
     }
 

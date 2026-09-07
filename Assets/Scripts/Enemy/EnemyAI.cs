@@ -485,6 +485,7 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
     protected virtual void Die()
     {
+        InfectionReport.RecordEnemyKill();
         SpawnDeathEffect();
         Destroy(gameObject);
     }

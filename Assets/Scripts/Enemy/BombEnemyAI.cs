@@ -147,7 +147,11 @@ public class BombEnemyAI : EnemyAI
             if (target == null || ReferenceEquals(target, this) || !damagedBuffer.Add(target))
                 continue;
 
-            target.TakeDamage(ScaleOutgoingDamage(explosionDamage));
+            DelayedExplosionDamage.Apply(
+                target,
+                ScaleOutgoingDamage(explosionDamage),
+                transform.position,
+                explosionRadius);
         }
 
         Destroy(gameObject);

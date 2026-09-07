@@ -250,6 +250,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
         SelectWeapon(weaponIndex);
         WeaponGranted?.Invoke(weaponIndex, CurrentWeaponName);
+        InfectionReport.RecordUpgrade(CurrentWeaponName);
         return true;
     }
 
@@ -515,6 +516,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
         hasUsbDash = true;
         UsbDashGranted?.Invoke();
+        InfectionReport.RecordUpgrade("USB Dash");
         return true;
     }
 
@@ -525,6 +527,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
         hasGoatDash = true;
         GoatDashGranted?.Invoke();
+        InfectionReport.RecordUpgrade("Goat Dash");
         return true;
     }
 
@@ -794,6 +797,7 @@ public class PlayerController : MonoBehaviour, IDamageable
             return;
 
         currentHealth = Mathf.Max(0f, currentHealth - amount);
+        InfectionReport.RecordDamageTaken(amount, currentHealth, maxHealth);
         HealthChanged?.Invoke(currentHealth, maxHealth);
         ScreenShake.Shake(damageShakeDuration, damageShakeStrength, damageShakeRotation);
 

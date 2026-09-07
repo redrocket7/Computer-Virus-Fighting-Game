@@ -385,7 +385,7 @@ public class GunAbsorbEnemyAI : EnemyAI
             if (target == null || ReferenceEquals(target, this) || !DamagedBuffer.Add(target))
                 continue;
 
-            target.TakeDamage(damage);
+            DelayedExplosionDamage.Apply(target, damage, center, explosionRadius);
         }
 
         if (boundEncounter == null)
@@ -408,7 +408,7 @@ public class GunAbsorbEnemyAI : EnemyAI
             if (!DamagedBuffer.Add(enemy))
                 continue;
 
-            enemy.TakeDamage(damage);
+            DelayedExplosionDamage.Apply(enemy, damage, center, explosionRadius);
         }
     }
 

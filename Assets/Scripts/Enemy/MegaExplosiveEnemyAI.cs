@@ -250,6 +250,7 @@ public class MegaExplosiveEnemyAI : EnemyAI
             return;
 
         isDying = true;
+        InfectionReport.RecordEnemyKill();
 
         if (burstRoutine != null)
         {
@@ -323,7 +324,11 @@ public class MegaExplosiveEnemyAI : EnemyAI
             if (target == null || ReferenceEquals(target, this) || !damagedBuffer.Add(target))
                 continue;
 
-            target.TakeDamage(ScaleOutgoingDamage(deathExplosionDamage));
+            DelayedExplosionDamage.Apply(
+                target,
+                ScaleOutgoingDamage(deathExplosionDamage),
+                transform.position,
+                deathExplosionRadius);
         }
     }
 

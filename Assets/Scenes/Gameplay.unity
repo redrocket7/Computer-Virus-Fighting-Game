@@ -535,7 +535,7 @@ MonoBehaviour:
   maxOverclockPerRoom: 1
   maxRepairPerRoom: 1
   maxShielderPerRoom: 1
-  shieldSpawnChance: 0.15
+  shieldSpawnChance: 0.1
   shieldHealth: 5
   megaEnemyPrefabs:
   - {fileID: 1771518582702127463, guid: 5ed879bcaf07bcd49b9c237c1a57d957, type: 3}
@@ -546,7 +546,7 @@ MonoBehaviour:
   targetRoomCount: 20
   maxPlacementAttempts: 2000
   overlapPadding: 10
-  seed: 0
+  seed: 1
   minimumPassageChunks: 20
   maximumPassageChunks: 120
   maximumPassageTurns: 2
@@ -560,17 +560,17 @@ MonoBehaviour:
   enemyMixFullDepth: 8
   easyThreatExponent: -1.25
   hardThreatExponent: 1.4
-  raidArrayChance: 0.2
-  bootLoopChance: 0.2
+  raidArrayChance: 0.1
+  bootLoopChance: 0.1
   bootLoopExtraWaves: 1
   bootLoopSpawnDelay: 2
   bootLoopAttackDelay: 0.75
-  packetLossChance: 0.2
+  packetLossChance: 0.1
   packetLossFizzleChance: 0.35
-  corruptedSaveChance: 0.2
+  corruptedSaveChance: 0.1
   corruptedSaveHealthMultiplier: 0.5
   corruptedSaveSpeedMultiplier: 1.4
-  corruptedSaveRespawnDelay: 0.6
+  corruptedSaveRespawnDelay: 1
   excludeStartRoomForModifiers: 1
   scaleModifiersByDepth: 1
   modifierFullDepth: 8
