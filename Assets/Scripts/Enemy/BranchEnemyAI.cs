@@ -14,6 +14,8 @@ public class BranchEnemyAI : EnemyAI
     [SerializeField] float firstSpawnDelay = 2f;
 
     float spawnTimer;
+    int forkSpawnIntervalBuffStacks;
+    float forkSpawnIntervalMultiplier = 1f;
 
     protected override void Start()
     {
@@ -21,6 +23,32 @@ public class BranchEnemyAI : EnemyAI
         spawnTimer = Mathf.Max(0f, firstSpawnDelay);
         forksPerSpawn = Mathf.Max(1, forksPerSpawn);
     }
+
+    public override bool CanReceiveForkSpawnIntervalBuff(int maxStacks) =>
+        forkSpawnIntervalBuffStacks < Mathf.Max(1, maxStacks);
+
+    public override bool TryApplyForkSpawnIntervalBuff(float multiplier, int maxStacks)
+    {
+        if (multiplier <= 0f || forkSpawnIntervalBuffStacks >= Mathf.Max(1, maxStacks))
+            return false;
+
+        forkSpawnIntervalBuffStacks++;
+        forkSpawnIntervalMultiplier *= multiplier;
+        return true;
+    }
+
+    public override bool TryRemoveForkSpawnIntervalBuff(float multiplier)
+    {
+        if (forkSpawnIntervalBuffStacks <= 0 || multiplier <= 0.0001f)
+            return false;
+
+        forkSpawnIntervalBuffStacks--;
+        forkSpawnIntervalMultiplier /= multiplier;
+        return true;
+    }
+
+    float GetCurrentForkSpawnInterval() =>
+        Mathf.Max(0.5f, forkSpawnInterval / Mathf.Max(0.01f, forkSpawnIntervalMultiplier));
 
     protected override void Update()
     {
@@ -32,7 +60,7 @@ public class BranchEnemyAI : EnemyAI
         if (spawnTimer > 0f)
             return;
 
-        spawnTimer = Mathf.Max(0.5f, forkSpawnInterval);
+        spawnTimer = GetCurrentForkSpawnInterval();
         SpawnForks(Mathf.Max(1, forksPerSpawn));
     }
 

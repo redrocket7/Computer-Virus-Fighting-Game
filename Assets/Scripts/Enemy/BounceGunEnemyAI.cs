@@ -15,6 +15,56 @@ public class BounceGunEnemyAI : GunEnemyAI
     [SerializeField] float threatScanInterval = 0.05f;
 
     EnemyBulletDodgeHelper.State dodgeState;
+    int dodgeDistanceBuffStacks;
+    int dodgeCooldownBuffStacks;
+    float dodgeDistanceMultiplier = 1f;
+    float dodgeCooldownMultiplier = 1f;
+
+    public override bool CanReceiveDodgeDistanceBuff(int maxStacks) =>
+        dodgeDistanceBuffStacks < Mathf.Max(1, maxStacks);
+
+    public override bool CanReceiveDodgeCooldownBuff(int maxStacks) =>
+        dodgeCooldownBuffStacks < Mathf.Max(1, maxStacks);
+
+    public override bool TryApplyDodgeDistanceBuff(float multiplier, int maxStacks)
+    {
+        if (multiplier <= 0f || dodgeDistanceBuffStacks >= Mathf.Max(1, maxStacks))
+            return false;
+
+        dodgeDistanceBuffStacks++;
+        dodgeDistanceMultiplier *= multiplier;
+        return true;
+    }
+
+    public override bool TryApplyDodgeCooldownBuff(float multiplier, int maxStacks)
+    {
+        if (multiplier <= 0f || dodgeCooldownBuffStacks >= Mathf.Max(1, maxStacks))
+            return false;
+
+        dodgeCooldownBuffStacks++;
+        dodgeCooldownMultiplier *= multiplier;
+        return true;
+    }
+
+    public override bool TryRemoveDodgeDistanceBuff(float multiplier)
+    {
+        if (dodgeDistanceBuffStacks <= 0 || multiplier <= 0.0001f)
+            return false;
+
+        dodgeDistanceBuffStacks--;
+        dodgeDistanceMultiplier /= multiplier;
+        return true;
+    }
+
+    public override bool TryRemoveDodgeCooldownBuff(float multiplier)
+    {
+        if (dodgeCooldownBuffStacks <= 0 || multiplier <= 0.0001f)
+            return false;
+
+        dodgeCooldownBuffStacks--;
+        dodgeCooldownMultiplier /= multiplier;
+        return true;
+    }
 
     protected override void Update()
     {
@@ -46,9 +96,9 @@ public class BounceGunEnemyAI : GunEnemyAI
         {
             DetectRange = detectRange,
             ThreatRadius = threatRadius,
-            DodgeDistance = dodgeDistance,
+            DodgeDistance = dodgeDistance * Mathf.Max(0.01f, dodgeDistanceMultiplier),
             DodgeDuration = dodgeDuration,
-            DodgeCooldown = dodgeCooldown,
+            DodgeCooldown = dodgeCooldown / Mathf.Max(0.01f, dodgeCooldownMultiplier),
             DodgeSpeed = dodgeSpeed,
             ThreatScanInterval = threatScanInterval
         };

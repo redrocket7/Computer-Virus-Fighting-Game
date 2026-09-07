@@ -108,6 +108,18 @@ public class DungeonGenerator : MonoBehaviour
     [Range(0f, 1f)]
     [Tooltip("Chance each player shot fizzles in a Packet Loss room.")]
     [SerializeField] float packetLossFizzleChance = 0.35f;
+    [Range(0f, 1f)]
+    [Tooltip("Base chance each combat room becomes Corrupted Save (one enemy respawns weaker/faster).")]
+    [SerializeField] float corruptedSaveChance = 0.2f;
+    [Range(0.05f, 1f)]
+    [Tooltip("Max-health multiplier applied to the Corrupted Save respawn.")]
+    [SerializeField] float corruptedSaveHealthMultiplier = 0.5f;
+    [Min(1f)]
+    [Tooltip("Move-speed multiplier applied to the Corrupted Save respawn.")]
+    [SerializeField] float corruptedSaveSpeedMultiplier = 1.4f;
+    [Min(0f)]
+    [Tooltip("Delay after the marked enemy dies before it respawns.")]
+    [SerializeField] float corruptedSaveRespawnDelay = 0.6f;
     [Tooltip("When enabled, the start room never rolls a room modifier.")]
     [SerializeField] bool excludeStartRoomForModifiers = true;
     [Tooltip("Scale modifier chances by door-hops from the start (farther = more likely).")]
@@ -454,12 +466,13 @@ public class DungeonGenerator : MonoBehaviour
         float raidChance = Mathf.Clamp01(raidArrayChance);
         float loopChance = Mathf.Clamp01(bootLoopChance);
         float packetChance = Mathf.Clamp01(packetLossChance);
-        if (raidChance <= 0f && loopChance <= 0f && packetChance <= 0f)
+        float corruptedChance = Mathf.Clamp01(corruptedSaveChance);
+        if (raidChance <= 0f && loopChance <= 0f && packetChance <= 0f && corruptedChance <= 0f)
             return;
 
         bool hasSupports = EnemyPoolHasSupportPrefab();
         RoomDefinition start = placedRooms.Count > 0 ? placedRooms[0] : null;
-        var candidates = new List<RoomModifierType>(3);
+        var candidates = new List<RoomModifierType>(4);
         int fullDepth = Mathf.Max(1, modifierFullDepth);
 
         for (int i = 0; i < placedRooms.Count; i++)
@@ -492,6 +505,7 @@ public class DungeonGenerator : MonoBehaviour
             float scaledRaid = Mathf.Clamp01(raidChance * chanceScale);
             float scaledLoop = Mathf.Clamp01(loopChance * chanceScale);
             float scaledPacket = Mathf.Clamp01(packetChance * chanceScale);
+            float scaledCorrupted = Mathf.Clamp01(corruptedChance * chanceScale);
 
             candidates.Clear();
             if (scaledRaid > 0f && Random.value <= scaledRaid)
@@ -506,6 +520,9 @@ public class DungeonGenerator : MonoBehaviour
             if (scaledPacket > 0f && Random.value <= scaledPacket)
                 candidates.Add(RoomModifierType.PacketLoss);
 
+            if (scaledCorrupted > 0f && Random.value <= scaledCorrupted)
+                candidates.Add(RoomModifierType.CorruptedSave);
+
             if (candidates.Count == 0)
                 continue;
 
@@ -519,6 +536,13 @@ public class DungeonGenerator : MonoBehaviour
             else if (chosen == RoomModifierType.PacketLoss)
             {
                 encounter.SetPacketLossSettings(packetLossFizzleChance);
+            }
+            else if (chosen == RoomModifierType.CorruptedSave)
+            {
+                encounter.SetCorruptedSaveSettings(
+                    corruptedSaveHealthMultiplier,
+                    corruptedSaveSpeedMultiplier,
+                    corruptedSaveRespawnDelay);
             }
 
             Debug.Log($"{chosen} assigned to room '{room.name}'.", room);
@@ -836,6 +860,7 @@ public class DungeonGenerator : MonoBehaviour
         encounter?.SetBootLoopExtraWaves(0);
         encounter?.SetBootLoopTiming(1.5f, 1.25f);
         encounter?.SetPacketLossSettings(0f);
+        encounter?.SetCorruptedSaveSettings(0.5f, 1.4f, 0.6f);
         encounter?.ClearHealthPickupDrop();
         encounter?.ClearUsbDashPickupDrop();
         encounter?.ClearGoatDashPickupDrop();

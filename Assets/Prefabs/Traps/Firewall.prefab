@@ -126,7 +126,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3c4d5e6f7a8901234567890abcdef04, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FirewallTrap
-  cycleInterval: 10
+  cycleInterval: 6
   startsClosed: 1
   transitionDuration: 0.35
   blockingCollider: {fileID: 7278681789919746531}

@@ -545,14 +545,14 @@ MonoBehaviour:
   megaMinimumDepth: 4
   targetRoomCount: 20
   maxPlacementAttempts: 2000
-  overlapPadding: 3
+  overlapPadding: 10
   seed: 0
   minimumPassageChunks: 20
   maximumPassageChunks: 120
   maximumPassageTurns: 2
   minimumStraightsAtDoors: 20
   minimumStraightsBetweenTurns: 20
-  passageOverlapPadding: 0.1
+  passageOverlapPadding: 1
   scaleSpawnCountByDepth: 1
   extraEnemiesPerDepth: 1
   maxSpawnCount: 0
@@ -567,6 +567,10 @@ MonoBehaviour:
   bootLoopAttackDelay: 0.75
   packetLossChance: 0.2
   packetLossFizzleChance: 0.35
+  corruptedSaveChance: 0.2
+  corruptedSaveHealthMultiplier: 0.5
+  corruptedSaveSpeedMultiplier: 1.4
+  corruptedSaveRespawnDelay: 0.6
   excludeStartRoomForModifiers: 1
   scaleModifiersByDepth: 1
   modifierFullDepth: 8
@@ -596,7 +600,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   player: {fileID: 1288065130}
-  enableFogCover: 0
+  enableFogCover: 1
   fogCoverMaterial: {fileID: 2100000, guid: 80ff4075a157b754c9f065444bfbb63e, type: 2}
   fogCoverColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
   fogOverrideMaterialColor: 1

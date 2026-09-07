@@ -1946,7 +1946,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 80ff4075a157b754c9f065444bfbb63e, type: 2}
+  - {fileID: 2100000, guid: b8d4f02a3c5e6194b7f1d2e3a4c5b6d7, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2410,8 +2410,17 @@ MonoBehaviour:
   maximumSpawnHeight: 1.5
   maxOverclockPerRoom: 1
   maxRepairPerRoom: 1
+  maxShielderPerRoom: 1
   shieldSpawnChance: 0.2
   shieldHealth: 4
+  scaleEnemyMixByDepth: 1
+  encounterDepth: 0
+  enemyMixFullDepth: 8
+  easyThreatExponent: -1.25
+  hardThreatExponent: 1.4
+  healthPickupMinCenterDistance: 14
+  healthPickupSampleRadius: 3
+  healthPickupSpawnAttempts: 48
 --- !u!1 &7572679734722804256
 GameObject:
   m_ObjectHideFlags: 0

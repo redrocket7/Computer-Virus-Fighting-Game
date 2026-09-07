@@ -42,10 +42,38 @@ public class ZipBombEnemyAI : EnemyAI
     bool isFused;
     float fuseRemaining;
     bool visualsInitialized;
+    int maxStoredDamageBuffStacks;
 
     public float StoredDamage => storedDamage;
     public float MaxStoredDamage => maxStoredDamage;
     public bool IsFull => storedDamage >= Mathf.Max(0.01f, maxStoredDamage) - 0.001f;
+
+    public override bool CanReceiveMaxStoredDamageBuff(int maxStacks) =>
+        maxStoredDamageBuffStacks < Mathf.Max(1, maxStacks);
+
+    public override bool TryApplyMaxStoredDamageBuff(float multiplier, int maxStacks)
+    {
+        if (multiplier <= 0f || maxStoredDamageBuffStacks >= Mathf.Max(1, maxStacks))
+            return false;
+
+        maxStoredDamageBuffStacks++;
+        maxStoredDamage *= multiplier;
+        ApplyGrowthVisuals();
+        return true;
+    }
+
+    public override bool TryRemoveMaxStoredDamageBuff(float multiplier)
+    {
+        if (maxStoredDamageBuffStacks <= 0 || multiplier <= 0.0001f)
+            return false;
+
+        maxStoredDamageBuffStacks--;
+        maxStoredDamage /= multiplier;
+        if (storedDamage > maxStoredDamage)
+            storedDamage = maxStoredDamage;
+        ApplyGrowthVisuals();
+        return true;
+    }
 
     protected override void Awake()
     {

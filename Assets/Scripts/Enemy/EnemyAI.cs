@@ -332,6 +332,22 @@ public class EnemyAI : MonoBehaviour, IDamageable
         return true;
     }
 
+    /// <summary>
+    /// One-shot Corrupted Save mutation: lower max health, higher move speed.
+    /// </summary>
+    public void ApplyCorruptedSaveMutation(float healthMultiplier, float speedMultiplier)
+    {
+        healthMultiplier = Mathf.Clamp(healthMultiplier, 0.05f, 1f);
+        speedMultiplier = Mathf.Max(0.05f, speedMultiplier);
+
+        maxHealth = Mathf.Max(0.1f, maxHealth * healthMultiplier);
+        currentHealth = maxHealth;
+
+        CacheBaseMoveSpeed();
+        moveSpeedMultiplier *= speedMultiplier;
+        RefreshMoveSpeed();
+    }
+
     public bool TryApplyFireRateBuff(float multiplier, int maxStacks)
     {
         if (!SupportsFireRateBuff || multiplier <= 0f || fireRateBuffStacks >= Mathf.Max(1, maxStacks))
@@ -401,6 +417,21 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
     public bool CanReceiveFireRateBuff(int maxStacks) =>
         SupportsFireRateBuff && fireRateBuffStacks < Mathf.Max(1, maxStacks);
+
+    public virtual bool CanReceiveForkSpawnIntervalBuff(int maxStacks) => false;
+    public virtual bool CanReceiveMaxStoredDamageBuff(int maxStacks) => false;
+    public virtual bool CanReceiveDodgeDistanceBuff(int maxStacks) => false;
+    public virtual bool CanReceiveDodgeCooldownBuff(int maxStacks) => false;
+
+    public virtual bool TryApplyForkSpawnIntervalBuff(float multiplier, int maxStacks) => false;
+    public virtual bool TryApplyMaxStoredDamageBuff(float multiplier, int maxStacks) => false;
+    public virtual bool TryApplyDodgeDistanceBuff(float multiplier, int maxStacks) => false;
+    public virtual bool TryApplyDodgeCooldownBuff(float multiplier, int maxStacks) => false;
+
+    public virtual bool TryRemoveForkSpawnIntervalBuff(float multiplier) => false;
+    public virtual bool TryRemoveMaxStoredDamageBuff(float multiplier) => false;
+    public virtual bool TryRemoveDodgeDistanceBuff(float multiplier) => false;
+    public virtual bool TryRemoveDodgeCooldownBuff(float multiplier) => false;
 
     /// <summary>
     /// Shooting enemies override this so Overclock can buff their fire rate.

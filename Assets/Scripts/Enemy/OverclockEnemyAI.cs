@@ -6,7 +6,11 @@ public enum OverclockBuffType
     Damage,
     MaxHealth,
     Speed,
-    FireRate
+    FireRate,
+    ForkSpawnInterval,
+    MaxStoredDamage,
+    DodgeDistance,
+    DodgeCooldown
 }
 
 /// <summary>
@@ -20,7 +24,11 @@ public class OverclockEnemyAI : EnemyAI
         OverclockBuffType.Damage,
         OverclockBuffType.MaxHealth,
         OverclockBuffType.Speed,
-        OverclockBuffType.FireRate
+        OverclockBuffType.FireRate,
+        OverclockBuffType.ForkSpawnInterval,
+        OverclockBuffType.MaxStoredDamage,
+        OverclockBuffType.DodgeDistance,
+        OverclockBuffType.DodgeCooldown
     };
 
     [Header("Support Movement")]
@@ -35,13 +43,17 @@ public class OverclockEnemyAI : EnemyAI
     [SerializeField] float maxHealthBuffMultiplier = 1.35f;
     [SerializeField] float speedBuffMultiplier = 1.25f;
     [SerializeField] float fireRateBuffMultiplier = 1.35f;
+    [SerializeField] float forkSpawnIntervalBuffMultiplier = 1.35f;
+    [SerializeField] float maxStoredDamageBuffMultiplier = 1.35f;
+    [SerializeField] float dodgeDistanceBuffMultiplier = 1.25f;
+    [SerializeField] float dodgeCooldownBuffMultiplier = 1.35f;
     [SerializeField] int maxStacksPerBuff = 1;
     [SerializeField] LayerMask allyMask = ~0;
     [SerializeField] ParticleSystem buffEffect;
 
     readonly List<EnemyAI> alliesInRange = new List<EnemyAI>();
     readonly List<EnemyAI> allySearchBuffer = new List<EnemyAI>();
-    readonly List<OverclockBuffType> validBuffs = new List<OverclockBuffType>(4);
+    readonly List<OverclockBuffType> validBuffs = new List<OverclockBuffType>(8);
     readonly List<AppliedOverclockBuff> appliedBuffs = new List<AppliedOverclockBuff>(8);
     readonly Collider[] overlapHits = new Collider[32];
 
@@ -134,7 +146,6 @@ public class OverclockEnemyAI : EnemyAI
 
     void TryBuffAlly()
     {
-        // Prefer any living ally in the same room; fall back to radius if unbound.
         CollectAllies(alliesInRange, buffRadius, damagedOnly: false, roomWide: true);
         if (alliesInRange.Count == 0)
             return;
@@ -255,10 +266,13 @@ public class OverclockEnemyAI : EnemyAI
 
     bool HasAnyAvailableBuff(EnemyAI ally)
     {
-        return ally.CanReceiveDamageBuff(maxStacksPerBuff) ||
-               ally.CanReceiveMaxHealthBuff(maxStacksPerBuff) ||
-               ally.CanReceiveSpeedBuff(maxStacksPerBuff) ||
-               ally.CanReceiveFireRateBuff(maxStacksPerBuff);
+        for (int i = 0; i < AllBuffTypes.Length; i++)
+        {
+            if (CanReceive(ally, AllBuffTypes[i]))
+                return true;
+        }
+
+        return false;
     }
 
     bool TryPickBuff(EnemyAI ally, out OverclockBuffType buffType)
@@ -289,6 +303,10 @@ public class OverclockEnemyAI : EnemyAI
             OverclockBuffType.MaxHealth => ally.CanReceiveMaxHealthBuff(maxStacksPerBuff),
             OverclockBuffType.Speed => ally.CanReceiveSpeedBuff(maxStacksPerBuff),
             OverclockBuffType.FireRate => ally.CanReceiveFireRateBuff(maxStacksPerBuff),
+            OverclockBuffType.ForkSpawnInterval => ally.CanReceiveForkSpawnIntervalBuff(maxStacksPerBuff),
+            OverclockBuffType.MaxStoredDamage => ally.CanReceiveMaxStoredDamageBuff(maxStacksPerBuff),
+            OverclockBuffType.DodgeDistance => ally.CanReceiveDodgeDistanceBuff(maxStacksPerBuff),
+            OverclockBuffType.DodgeCooldown => ally.CanReceiveDodgeCooldownBuff(maxStacksPerBuff),
             _ => false
         };
     }
@@ -302,6 +320,10 @@ public class OverclockEnemyAI : EnemyAI
             OverclockBuffType.MaxHealth => ally.TryApplyMaxHealthBuff(multiplier, maxStacksPerBuff),
             OverclockBuffType.Speed => ally.TryApplySpeedBuff(multiplier, maxStacksPerBuff),
             OverclockBuffType.FireRate => ally.TryApplyFireRateBuff(multiplier, maxStacksPerBuff),
+            OverclockBuffType.ForkSpawnInterval => ally.TryApplyForkSpawnIntervalBuff(multiplier, maxStacksPerBuff),
+            OverclockBuffType.MaxStoredDamage => ally.TryApplyMaxStoredDamageBuff(multiplier, maxStacksPerBuff),
+            OverclockBuffType.DodgeDistance => ally.TryApplyDodgeDistanceBuff(multiplier, maxStacksPerBuff),
+            OverclockBuffType.DodgeCooldown => ally.TryApplyDodgeCooldownBuff(multiplier, maxStacksPerBuff),
             _ => false
         };
 
@@ -318,6 +340,10 @@ public class OverclockEnemyAI : EnemyAI
             OverclockBuffType.MaxHealth => maxHealthBuffMultiplier,
             OverclockBuffType.Speed => speedBuffMultiplier,
             OverclockBuffType.FireRate => fireRateBuffMultiplier,
+            OverclockBuffType.ForkSpawnInterval => forkSpawnIntervalBuffMultiplier,
+            OverclockBuffType.MaxStoredDamage => maxStoredDamageBuffMultiplier,
+            OverclockBuffType.DodgeDistance => dodgeDistanceBuffMultiplier,
+            OverclockBuffType.DodgeCooldown => dodgeCooldownBuffMultiplier,
             _ => 1f
         };
     }
@@ -337,6 +363,18 @@ public class OverclockEnemyAI : EnemyAI
                 break;
             case OverclockBuffType.FireRate:
                 ally.TryRemoveFireRateBuff(multiplier);
+                break;
+            case OverclockBuffType.ForkSpawnInterval:
+                ally.TryRemoveForkSpawnIntervalBuff(multiplier);
+                break;
+            case OverclockBuffType.MaxStoredDamage:
+                ally.TryRemoveMaxStoredDamageBuff(multiplier);
+                break;
+            case OverclockBuffType.DodgeDistance:
+                ally.TryRemoveDodgeDistanceBuff(multiplier);
+                break;
+            case OverclockBuffType.DodgeCooldown:
+                ally.TryRemoveDodgeCooldownBuff(multiplier);
                 break;
         }
     }

@@ -11,7 +11,9 @@ public enum RoomModifierType
     /// <summary>When the current pack dies, another wave of enemies spawns.</summary>
     BootLoop = 2,
     /// <summary>Player shots have a chance to fizzle while the encounter is active.</summary>
-    PacketLoss = 3
+    PacketLoss = 3,
+    /// <summary>One random enemy respawns once after death, weaker but faster.</summary>
+    CorruptedSave = 4
 }
 
 /// <summary>
@@ -79,6 +81,17 @@ public class RoomEncounter : MonoBehaviour
     float bootLoopAttackDelay = 1.25f;
     float packetLossFizzleChance;
     bool bootLoopWavePending;
+    EnemyAI corruptedSaveHost;
+    GameObject corruptedSavePrefab;
+    bool corruptedSaveConsumed;
+    bool corruptedSavePending;
+    float corruptedSaveHealthMultiplier = 0.5f;
+    float corruptedSaveSpeedMultiplier = 1.4f;
+    float corruptedSaveRespawnDelay = 0.6f;
+    [Header("Spawn Telegraph")]
+    [SerializeField] float spawnTelegraphMinDelay = 1f;
+    [SerializeField] float spawnTelegraphMaxDelay = 6f;
+    bool initialWavePending;
 
     RoomDefinition room;
     readonly HashSet<EnemyAI> livingEnemies = new HashSet<EnemyAI>();
@@ -176,6 +189,14 @@ public class RoomEncounter : MonoBehaviour
         roomModifier = modifier;
         if (modifier != RoomModifierType.BootLoop)
             bootLoopWavesRemaining = 0;
+
+        if (modifier != RoomModifierType.CorruptedSave)
+        {
+            corruptedSaveHost = null;
+            corruptedSavePrefab = null;
+            corruptedSaveConsumed = false;
+            corruptedSavePending = false;
+        }
     }
 
     public void SetBootLoopExtraWaves(int extraWaves)
@@ -192,6 +213,16 @@ public class RoomEncounter : MonoBehaviour
     public void SetPacketLossSettings(float fizzleChance)
     {
         packetLossFizzleChance = Mathf.Clamp01(fizzleChance);
+    }
+
+    public void SetCorruptedSaveSettings(
+        float healthMultiplier,
+        float speedMultiplier,
+        float respawnDelay)
+    {
+        corruptedSaveHealthMultiplier = Mathf.Clamp(healthMultiplier, 0.05f, 1f);
+        corruptedSaveSpeedMultiplier = Mathf.Max(1f, speedMultiplier);
+        corruptedSaveRespawnDelay = Mathf.Max(0f, respawnDelay);
     }
 
     public void ConfigureHealthPickupDrop(GameObject prefab, float healAmount)
@@ -292,12 +323,34 @@ public class RoomEncounter : MonoBehaviour
 
         SetDoorsLocked(true);
         BeginPacketLossEffect();
-        SpawnWave(includeBonuses: true, holdoffOverride: -1f);
+        Started?.Invoke();
+        StartCoroutine(SpawnInitialWaveRoutine());
+    }
+
+    IEnumerator SpawnInitialWaveRoutine()
+    {
+        initialWavePending = true;
+
+        List<PlannedSpawn> planned = new List<PlannedSpawn>(PlanWaveSpawns(includeBonuses: true));
+        if (planned.Count == 0)
+        {
+            initialWavePending = false;
+            CompleteEncounter();
+            yield break;
+        }
+
+        yield return SpawnPlannedWaveStaggered(planned, attackDelay, allowCorruptedSavePick: true);
+        initialWavePending = false;
 
         if (livingEnemies.Count == 0)
             CompleteEncounter();
-        else
-            Started?.Invoke();
+    }
+
+    float RollSpawnTelegraphDelay()
+    {
+        float min = Mathf.Min(spawnTelegraphMinDelay, spawnTelegraphMaxDelay);
+        float max = Mathf.Max(spawnTelegraphMinDelay, spawnTelegraphMaxDelay);
+        return Random.Range(min, max);
     }
 
     public void RegisterEnemy(EnemyAI enemy)
@@ -315,13 +368,76 @@ public class RoomEncounter : MonoBehaviour
             return;
 
         livingEnemies.Remove(enemy);
-        if (!started || cleared || livingEnemies.Count > 0 || bootLoopWavePending)
+
+        if (TryBeginCorruptedSaveRespawn(enemy))
+            return;
+
+        if (!started || cleared || livingEnemies.Count > 0 || bootLoopWavePending || corruptedSavePending || initialWavePending)
             return;
 
         if (TryBeginBootLoopWave())
             return;
 
         CompleteEncounter();
+    }
+
+    bool TryBeginCorruptedSaveRespawn(EnemyAI enemy)
+    {
+        if (roomModifier != RoomModifierType.CorruptedSave || corruptedSaveConsumed)
+            return false;
+
+        if (enemy != corruptedSaveHost || corruptedSavePrefab == null)
+            return false;
+
+        corruptedSaveConsumed = true;
+        corruptedSavePending = true;
+        Vector3 deathPosition = enemy.transform.position;
+        StartCoroutine(CorruptedSaveRespawnRoutine(deathPosition));
+        return true;
+    }
+
+    IEnumerator CorruptedSaveRespawnRoutine(Vector3 deathPosition)
+    {
+        BootLoopSpawnMarker marker = null;
+        if (corruptedSaveRespawnDelay > 0f)
+        {
+            marker = BootLoopSpawnMarker.Create(deathPosition, 1.1f);
+            yield return new WaitForSeconds(corruptedSaveRespawnDelay);
+            if (marker != null)
+                Destroy(marker.gameObject);
+        }
+
+        if (cleared || corruptedSavePrefab == null)
+        {
+            corruptedSavePending = false;
+            if (livingEnemies.Count == 0 && !bootLoopWavePending)
+                CompleteEncounter();
+            yield break;
+        }
+
+        Vector3 spawnPosition = deathPosition;
+        if (NavMesh.SamplePosition(deathPosition, out NavMeshHit hit, 4f, NavMesh.AllAreas))
+            spawnPosition = hit.position;
+
+        GameObject instance = Instantiate(corruptedSavePrefab, spawnPosition, Quaternion.identity);
+        EnemyAI ai = instance.GetComponent<EnemyAI>() ?? instance.GetComponentInChildren<EnemyAI>();
+        if (ai != null)
+        {
+            ai.ApplyCorruptedSaveMutation(corruptedSaveHealthMultiplier, corruptedSaveSpeedMultiplier);
+            RegisterEnemy(ai);
+            float holdoff = Mathf.Max(0.15f, attackDelay * 0.5f);
+            ai.SetCombatHoldoff(holdoff);
+        }
+
+        corruptedSavePending = false;
+
+        if (livingEnemies.Count == 0)
+        {
+            Debug.LogWarning(
+                $"Corrupted Save room '{room.name}' failed to respawn the corrupted enemy.",
+                this);
+            CompleteEncounter();
+        }
     }
 
     bool TryBeginBootLoopWave()
@@ -348,14 +464,7 @@ public class RoomEncounter : MonoBehaviour
             yield break;
         }
 
-        ShowSpawnMarkers(planned);
-
-        float delay = bootLoopSpawnDelay;
-        if (delay > 0f)
-            yield return new WaitForSeconds(delay);
-
-        ClearSpawnMarkers();
-        SpawnPlannedWave(planned, bootLoopAttackDelay);
+        yield return SpawnPlannedWaveStaggered(planned, bootLoopAttackDelay, allowCorruptedSavePick: false);
         bootLoopWavePending = false;
 
         if (livingEnemies.Count == 0)
@@ -486,8 +595,90 @@ public class RoomEncounter : MonoBehaviour
         activeSpawnMarkers.Clear();
     }
 
-    void SpawnPlannedWave(List<PlannedSpawn> planned, float holdoff)
+    IEnumerator SpawnPlannedWaveStaggered(
+        List<PlannedSpawn> planned,
+        float holdoff,
+        bool allowCorruptedSavePick)
     {
+        ClearSpawnMarkers();
+
+        var markers = new BootLoopSpawnMarker[planned.Count];
+        for (int i = 0; i < planned.Count; i++)
+        {
+            PlannedSpawn spawn = planned[i];
+            BootLoopSpawnMarker marker = BootLoopSpawnMarker.Create(spawn.Position, spawn.MarkerRadius);
+            markers[i] = marker;
+            activeSpawnMarkers.Add(marker);
+        }
+
+        int corruptedIndex = -1;
+        if (allowCorruptedSavePick &&
+            roomModifier == RoomModifierType.CorruptedSave &&
+            corruptedSaveHost == null &&
+            planned.Count > 0)
+        {
+            corruptedIndex = Random.Range(0, planned.Count);
+        }
+
+        int remaining = planned.Count;
+        for (int i = 0; i < planned.Count; i++)
+        {
+            int index = i;
+            StartCoroutine(SpawnSingleEnemyTelegraphed(
+                planned[index],
+                markers[index],
+                holdoff,
+                index == corruptedIndex,
+                () => remaining--));
+        }
+
+        while (remaining > 0 && !cleared)
+            yield return null;
+    }
+
+    IEnumerator SpawnSingleEnemyTelegraphed(
+        PlannedSpawn spawn,
+        BootLoopSpawnMarker marker,
+        float holdoff,
+        bool markAsCorruptedSave,
+        System.Action onComplete)
+    {
+        float delay = RollSpawnTelegraphDelay();
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        if (marker != null)
+        {
+            activeSpawnMarkers.Remove(marker);
+            Destroy(marker.gameObject);
+        }
+
+        if (cleared || spawn.Prefab == null)
+        {
+            onComplete?.Invoke();
+            yield break;
+        }
+
+        GameObject instance = Instantiate(spawn.Prefab, spawn.Position, Quaternion.identity);
+        EnemyAI ai = instance.GetComponent<EnemyAI>() ?? instance.GetComponentInChildren<EnemyAI>();
+        RegisterEnemy(ai);
+        if (ai != null && holdoff > 0f)
+            ai.SetCombatHoldoff(holdoff);
+        TryGrantRandomShield(ai);
+
+        if (markAsCorruptedSave && ai != null)
+        {
+            corruptedSaveHost = ai;
+            corruptedSavePrefab = spawn.Prefab;
+        }
+
+        onComplete?.Invoke();
+    }
+
+    void SpawnPlannedWave(List<PlannedSpawn> planned, float holdoff, bool allowCorruptedSavePick = false)
+    {
+        var justSpawned = new List<(EnemyAI ai, GameObject prefab)>(planned.Count);
+
         for (int i = 0; i < planned.Count; i++)
         {
             PlannedSpawn spawn = planned[i];
@@ -500,6 +691,19 @@ public class RoomEncounter : MonoBehaviour
             if (ai != null && holdoff > 0f)
                 ai.SetCombatHoldoff(holdoff);
             TryGrantRandomShield(ai);
+
+            if (ai != null)
+                justSpawned.Add((ai, spawn.Prefab));
+        }
+
+        if (allowCorruptedSavePick &&
+            roomModifier == RoomModifierType.CorruptedSave &&
+            corruptedSaveHost == null &&
+            justSpawned.Count > 0)
+        {
+            (EnemyAI ai, GameObject prefab) pick = justSpawned[Random.Range(0, justSpawned.Count)];
+            corruptedSaveHost = pick.ai;
+            corruptedSavePrefab = pick.prefab;
         }
     }
 
@@ -507,7 +711,7 @@ public class RoomEncounter : MonoBehaviour
     {
         List<PlannedSpawn> planned = PlanWaveSpawns(includeBonuses);
         float holdoff = holdoffOverride >= 0f ? holdoffOverride : attackDelay;
-        SpawnPlannedWave(planned, holdoff);
+        SpawnPlannedWave(planned, holdoff, allowCorruptedSavePick: includeBonuses);
     }
 
     GameObject ChooseRaidSupportPrefab(int spawnedOverclock, int spawnedRepair, int spawnedShielder)
@@ -846,6 +1050,8 @@ public class RoomEncounter : MonoBehaviour
 
         cleared = true;
         bootLoopWavePending = false;
+        initialWavePending = false;
+        corruptedSavePending = false;
         ClearSpawnMarkers();
         EndPacketLossEffect();
         SetDoorsLocked(false);
