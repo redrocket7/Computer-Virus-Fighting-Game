@@ -173,6 +173,12 @@ public class EnemyAI : MonoBehaviour, IDamageable
         return Player;
     }
 
+    /// <summary>World-space point to path toward for the current chase target.</summary>
+    protected virtual Vector3 GetChaseDestination(Transform chaseTarget)
+    {
+        return chaseTarget.position;
+    }
+
     /// <summary>How close is “close enough” to the chase target.</summary>
     protected virtual float GetChaseStopDistance()
     {
@@ -214,7 +220,7 @@ public class EnemyAI : MonoBehaviour, IDamageable
         {
             pathRefreshTimer = pathRefreshInterval;
             Agent.isStopped = false;
-            Agent.SetDestination(chaseTarget.position);
+            Agent.SetDestination(GetChaseDestination(chaseTarget));
         }
 
         // Sample remainingDistance only on repath frames — it forces path length work.

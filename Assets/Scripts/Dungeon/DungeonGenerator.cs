@@ -120,6 +120,22 @@ public class DungeonGenerator : MonoBehaviour
     [Min(0f)]
     [Tooltip("Delay after the marked enemy dies before it respawns.")]
     [SerializeField] float corruptedSaveRespawnDelay = 0.6f;
+    [Range(0f, 1f)]
+    [Tooltip("Base chance each combat room becomes Fork Bomb (tinies drip in until non-tiny enemies die).")]
+    [SerializeField] float forkBombChance = 0.2f;
+    [Min(0.5f)]
+    [Tooltip("Seconds between Fork Bomb tiny-pack spawns.")]
+    [SerializeField] float forkBombSpawnInterval = 4f;
+    [Min(0f)]
+    [Tooltip("Combat holdoff for tinies spawned by Fork Bomb.")]
+    [SerializeField] float forkBombAttackDelay = 1f;
+    [Min(1)]
+    [SerializeField] int forkBombPackMinSize = 3;
+    [Min(1)]
+    [SerializeField] int forkBombPackMaxSize = 4;
+    [Min(1)]
+    [Tooltip("Soft cap on living tinies in a Fork Bomb room.")]
+    [SerializeField] int forkBombMaxLivingTinies = 12;
     [Tooltip("When enabled, the start room never rolls a room modifier.")]
     [SerializeField] bool excludeStartRoomForModifiers = true;
     [Tooltip("Scale modifier chances by door-hops from the start (farther = more likely).")]
@@ -467,12 +483,19 @@ public class DungeonGenerator : MonoBehaviour
         float loopChance = Mathf.Clamp01(bootLoopChance);
         float packetChance = Mathf.Clamp01(packetLossChance);
         float corruptedChance = Mathf.Clamp01(corruptedSaveChance);
-        if (raidChance <= 0f && loopChance <= 0f && packetChance <= 0f && corruptedChance <= 0f)
+        float forkBombRollChance = Mathf.Clamp01(forkBombChance);
+        if (raidChance <= 0f &&
+            loopChance <= 0f &&
+            packetChance <= 0f &&
+            corruptedChance <= 0f &&
+            forkBombRollChance <= 0f)
             return;
 
         bool hasSupports = EnemyPoolHasSupportPrefab();
+        GameObject tinyPrefab = FindTinyEnemyPrefab();
+        bool hasTiny = tinyPrefab != null;
         RoomDefinition start = placedRooms.Count > 0 ? placedRooms[0] : null;
-        var candidates = new List<RoomModifierType>(4);
+        var candidates = new List<RoomModifierType>(5);
         int fullDepth = Mathf.Max(1, modifierFullDepth);
 
         for (int i = 0; i < placedRooms.Count; i++)
@@ -506,6 +529,7 @@ public class DungeonGenerator : MonoBehaviour
             float scaledLoop = Mathf.Clamp01(loopChance * chanceScale);
             float scaledPacket = Mathf.Clamp01(packetChance * chanceScale);
             float scaledCorrupted = Mathf.Clamp01(corruptedChance * chanceScale);
+            float scaledForkBomb = Mathf.Clamp01(forkBombRollChance * chanceScale);
 
             candidates.Clear();
             if (scaledRaid > 0f && Random.value <= scaledRaid)
@@ -522,6 +546,9 @@ public class DungeonGenerator : MonoBehaviour
 
             if (scaledCorrupted > 0f && Random.value <= scaledCorrupted)
                 candidates.Add(RoomModifierType.CorruptedSave);
+
+            if (scaledForkBomb > 0f && Random.value <= scaledForkBomb && hasTiny)
+                candidates.Add(RoomModifierType.ForkBomb);
 
             if (candidates.Count == 0)
                 continue;
@@ -544,6 +571,16 @@ public class DungeonGenerator : MonoBehaviour
                     corruptedSaveSpeedMultiplier,
                     corruptedSaveRespawnDelay);
             }
+            else if (chosen == RoomModifierType.ForkBomb)
+            {
+                encounter.SetForkBombSettings(
+                    tinyPrefab,
+                    forkBombSpawnInterval,
+                    forkBombAttackDelay,
+                    forkBombPackMinSize,
+                    forkBombPackMaxSize,
+                    forkBombMaxLivingTinies);
+            }
 
             Debug.Log($"{chosen} assigned to room '{room.name}'.", room);
         }
@@ -552,6 +589,13 @@ public class DungeonGenerator : MonoBehaviour
         {
             Debug.LogWarning(
                 "RAID Array rolls skipped: enemy prefab pool has no Repair/Overclock/Shielder supports.",
+                this);
+        }
+
+        if (forkBombRollChance > 0f && !hasTiny)
+        {
+            Debug.LogWarning(
+                "Fork Bomb rolls skipped: enemy prefab pool has no TinyEnemyAI prefab.",
                 this);
         }
     }
@@ -573,6 +617,25 @@ public class DungeonGenerator : MonoBehaviour
         }
 
         return false;
+    }
+
+    GameObject FindTinyEnemyPrefab()
+    {
+        if (enemyPrefabs == null)
+            return null;
+
+        for (int i = 0; i < enemyPrefabs.Length; i++)
+        {
+            GameObject prefab = enemyPrefabs[i];
+            if (prefab == null)
+                continue;
+
+            EnemyAI ai = prefab.GetComponent<EnemyAI>() ?? prefab.GetComponentInChildren<EnemyAI>();
+            if (ai is TinyEnemyAI)
+                return prefab;
+        }
+
+        return null;
     }
 
     Dictionary<RoomDefinition, int> BuildRoomDepthMap()
@@ -676,13 +739,12 @@ public class DungeonGenerator : MonoBehaviour
         AlignSocketToEndpoint(candidate.transform, incoming, passageEnd, passageDirection);
 
         Rect candidateRect = candidate.GetWorldFootprint(overlapPadding);
-        Rect candidateInterior = candidate.GetWorldFootprint(-1f);
         foreach (var existing in placedRooms)
         {
-            bool overlaps = existing == host
-                ? existing.GetWorldFootprint(-1f).Overlaps(candidateInterior)
-                : existing.GetWorldFootprint(overlapPadding).Overlaps(candidateRect);
-            if (overlaps)
+            // Always use the padded footprints — including against the host room.
+            // The old host special-case used shrunk rects and ignored overlapPadding,
+            // so a jogged corridor could park a new room flush against the host's walls.
+            if (existing.GetWorldFootprint(overlapPadding).Overlaps(candidateRect))
             {
                 DiscardCandidate(candidate);
                 DiscardPassages(candidatePassages);
@@ -690,6 +752,7 @@ public class DungeonGenerator : MonoBehaviour
             }
         }
 
+        Rect candidateInterior = candidate.GetWorldFootprint(-1f);
         foreach (var passage in placedPassages)
         {
             if (passage.GetWorldFootprint(-passageOverlapPadding).Overlaps(candidateInterior))
@@ -861,6 +924,7 @@ public class DungeonGenerator : MonoBehaviour
         encounter?.SetBootLoopTiming(1.5f, 1.25f);
         encounter?.SetPacketLossSettings(0f);
         encounter?.SetCorruptedSaveSettings(0.5f, 1.4f, 0.6f);
+        encounter?.SetForkBombSettings(null, 4f, 1f, 3, 4, 12);
         encounter?.ClearHealthPickupDrop();
         encounter?.ClearUsbDashPickupDrop();
         encounter?.ClearGoatDashPickupDrop();

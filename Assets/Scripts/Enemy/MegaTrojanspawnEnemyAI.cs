@@ -10,7 +10,7 @@ public class MegaTrojanspawnEnemyAI : EnemyAI
     [Header("Living Spawn")]
     [SerializeField] GameObject tinyEnemyPrefab;
     [SerializeField] float tinySpawnInterval = 4f;
-    [SerializeField] int tiniesPerWave = 1;
+    [SerializeField] int tiniesPerWave = 3;
     [SerializeField] float tinySpawnRadius = 2.5f;
     [SerializeField] float firstSpawnDelay = 1.5f;
 

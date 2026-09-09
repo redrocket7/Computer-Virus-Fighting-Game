@@ -2665,6 +2665,8 @@ MonoBehaviour:
   healthPickupMinCenterDistance: 14
   healthPickupSampleRadius: 3
   healthPickupSpawnAttempts: 48
+  spawnTelegraphMinDelay: 1
+  spawnTelegraphMaxDelay: 6
 --- !u!1001 &7654199170215694741
 PrefabInstance:
   m_ObjectHideFlags: 0

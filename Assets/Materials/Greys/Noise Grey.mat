@@ -31,7 +31,7 @@ Material:
     - _Metallic: 0
     - _NoiseOctaves: 4
     - _NoiseScale: 0.8
-    - _NoiseStrength: 0.2
+    - _NoiseStrength: 0.3
     - _Smoothness: 0.15
     - _SrcBlend: 1
     - _Surface: 0

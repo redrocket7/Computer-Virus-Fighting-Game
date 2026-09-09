@@ -3119,6 +3119,11 @@ MonoBehaviour:
   healthPickupMinCenterDistance: 14
   healthPickupSampleRadius: 3
   healthPickupSpawnAttempts: 48
+  tinyPackMinSize: 3
+  tinyPackMaxSize: 4
+  tinyPackClusterRadius: 2.25
+  spawnTelegraphMinDelay: 1
+  spawnTelegraphMaxDelay: 6
 --- !u!1001 &1175012136850177065
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3203,7 +3208,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.25
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
       propertyPath: m_LocalPosition.z
@@ -3265,7 +3270,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.25
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 6498010863864404840, guid: c25c5e1767962a84eab466e827665c0a, type: 3}
       propertyPath: m_LocalPosition.z

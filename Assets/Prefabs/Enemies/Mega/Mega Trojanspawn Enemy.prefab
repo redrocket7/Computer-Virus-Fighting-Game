@@ -819,7 +819,7 @@ MonoBehaviour:
   deathEffectHeight: 0.35
   tinyEnemyPrefab: {fileID: 1771518582702127463, guid: b15bcfbe3c7ddb74687c9f5744e561e3, type: 3}
   tinySpawnInterval: 3
-  tiniesPerWave: 2
+  tiniesPerWave: 3
   tinySpawnRadius: 3
   firstSpawnDelay: 1.5
   trojanspawnPrefab: {fileID: 1771518582702127463, guid: 9d8923f811322114db031e454a650c8e, type: 3}

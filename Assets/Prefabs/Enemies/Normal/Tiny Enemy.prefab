@@ -436,7 +436,7 @@ GameObject:
   - component: {fileID: 6929010665188915870}
   - component: {fileID: 4379296795305699013}
   - component: {fileID: 4354607952219119429}
-  - component: {fileID: 2525807994708376942}
+  - component: {fileID: -7444801833688616494}
   - component: {fileID: 7806898481211741642}
   m_Layer: 0
   m_Name: Tiny Enemy
@@ -564,7 +564,7 @@ MonoBehaviour:
   bodyMesh: {fileID: 0}
   tiltSmoothing: 6
   tiltUpdateInterval: 0.1
---- !u!114 &2525807994708376942
+--- !u!114 &-7444801833688616494
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -573,18 +573,26 @@ MonoBehaviour:
   m_GameObject: {fileID: 1771518582702127463}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f3f4257da1a43dd4dbf70906f13c4d6a, type: 3}
+  m_Script: {fileID: 11500000, guid: a26937b175bf0ec4181bc0b272505fff, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EnemyAI
+  m_EditorClassIdentifier: Assembly-CSharp::TinyEnemyAI
   player: {fileID: 0}
   pathRefreshInterval: 0.2
   maxHealth: 1
-  difficulty: 1
+  difficulty: 0
   contactDamage: 1
   attackRange: 2
   attackInterval: 1
   deathEffectPrefab: {fileID: 512345678901234501, guid: b70891a2b3c4d5e6f708901a2b3c4d50, type: 3}
   deathEffectHeight: 0.35
+  packSearchRadius: 10
+  preferredPackSpacing: 2.2
+  separationDistance: 1.1
+  cohesionWeight: 2.4
+  separationWeight: 1.6
+  packPullClamp: 3.5
+  minPackSize: 3
+  idealPackSize: 10
 --- !u!65 &7806898481211741642
 BoxCollider:
   m_ObjectHideFlags: 0

@@ -209,6 +209,7 @@ public static class InfectionReport
             RoomModifierType.BootLoop => "Boot Loop",
             RoomModifierType.PacketLoss => "Packet Loss",
             RoomModifierType.CorruptedSave => "Corrupted Save",
+            RoomModifierType.ForkBomb => "Fork Bomb",
             _ => type.ToString()
         };
     }

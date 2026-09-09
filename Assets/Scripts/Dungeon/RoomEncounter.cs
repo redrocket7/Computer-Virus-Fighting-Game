@@ -13,7 +13,9 @@ public enum RoomModifierType
     /// <summary>Player shots have a chance to fizzle while the encounter is active.</summary>
     PacketLoss = 3,
     /// <summary>One random enemy respawns once after death, weaker but faster.</summary>
-    CorruptedSave = 4
+    CorruptedSave = 4,
+    /// <summary>Spawns tiny enemies over time until all non-tiny enemies are dead.</summary>
+    ForkBomb = 5
 }
 
 /// <summary>
@@ -88,6 +90,21 @@ public class RoomEncounter : MonoBehaviour
     float corruptedSaveHealthMultiplier = 0.5f;
     float corruptedSaveSpeedMultiplier = 1.4f;
     float corruptedSaveRespawnDelay = 0.6f;
+    GameObject forkBombTinyPrefab;
+    float forkBombSpawnInterval = 4f;
+    float forkBombAttackDelay = 1f;
+    int forkBombPackMinSize = 3;
+    int forkBombPackMaxSize = 4;
+    int forkBombMaxLivingTinies = 12;
+    bool forkBombActive;
+    bool forkBombWavePending;
+    Coroutine forkBombRoutine;
+
+    [Header("Tiny Pack Spawns")]
+    [SerializeField] int tinyPackMinSize = 3;
+    [SerializeField] int tinyPackMaxSize = 4;
+    [SerializeField] float tinyPackClusterRadius = 2.25f;
+
     [Header("Spawn Telegraph")]
     [SerializeField] float spawnTelegraphMinDelay = 1f;
     [SerializeField] float spawnTelegraphMaxDelay = 6f;
@@ -198,6 +215,9 @@ public class RoomEncounter : MonoBehaviour
             corruptedSaveConsumed = false;
             corruptedSavePending = false;
         }
+
+        if (modifier != RoomModifierType.ForkBomb)
+            StopForkBomb(clearSettings: true);
     }
 
     public void SetBootLoopExtraWaves(int extraWaves)
@@ -224,6 +244,22 @@ public class RoomEncounter : MonoBehaviour
         corruptedSaveHealthMultiplier = Mathf.Clamp(healthMultiplier, 0.05f, 1f);
         corruptedSaveSpeedMultiplier = Mathf.Max(1f, speedMultiplier);
         corruptedSaveRespawnDelay = Mathf.Max(0f, respawnDelay);
+    }
+
+    public void SetForkBombSettings(
+        GameObject tinyPrefab,
+        float spawnInterval,
+        float attackDelay,
+        int packMinSize,
+        int packMaxSize,
+        int maxLivingTinies)
+    {
+        forkBombTinyPrefab = tinyPrefab;
+        forkBombSpawnInterval = Mathf.Max(0.5f, spawnInterval);
+        forkBombAttackDelay = Mathf.Max(0f, attackDelay);
+        forkBombPackMinSize = Mathf.Max(1, packMinSize);
+        forkBombPackMaxSize = Mathf.Max(forkBombPackMinSize, packMaxSize);
+        forkBombMaxLivingTinies = Mathf.Max(1, maxLivingTinies);
     }
 
     public void ConfigureHealthPickupDrop(GameObject prefab, float healAmount)
@@ -344,7 +380,9 @@ public class RoomEncounter : MonoBehaviour
         yield return SpawnPlannedWaveStaggered(planned, attackDelay, allowCorruptedSavePick: true);
         initialWavePending = false;
 
-        if (livingEnemies.Count == 0)
+        TryStartForkBomb();
+
+        if (livingEnemies.Count == 0 && !forkBombWavePending)
             CompleteEncounter();
     }
 
@@ -371,10 +409,19 @@ public class RoomEncounter : MonoBehaviour
 
         livingEnemies.Remove(enemy);
 
+        if (roomModifier == RoomModifierType.ForkBomb && !HasLivingNonTinyEnemies())
+            forkBombActive = false;
+
         if (TryBeginCorruptedSaveRespawn(enemy))
             return;
 
-        if (!started || cleared || livingEnemies.Count > 0 || bootLoopWavePending || corruptedSavePending || initialWavePending)
+        if (!started ||
+            cleared ||
+            livingEnemies.Count > 0 ||
+            bootLoopWavePending ||
+            corruptedSavePending ||
+            initialWavePending ||
+            forkBombWavePending)
             return;
 
         if (TryBeginBootLoopWave())
@@ -453,6 +500,171 @@ public class RoomEncounter : MonoBehaviour
         return true;
     }
 
+    void TryStartForkBomb()
+    {
+        if (roomModifier != RoomModifierType.ForkBomb || forkBombTinyPrefab == null || cleared)
+            return;
+
+        if (!IsTinyEnemyPrefab(forkBombTinyPrefab))
+        {
+            Debug.LogWarning(
+                $"Fork Bomb room '{(room != null ? room.name : name)}' tiny prefab is not a TinyEnemyAI.",
+                this);
+            return;
+        }
+
+        forkBombActive = true;
+        if (forkBombRoutine != null)
+            StopCoroutine(forkBombRoutine);
+        forkBombRoutine = StartCoroutine(ForkBombSpawnRoutine());
+    }
+
+    void StopForkBomb(bool clearSettings)
+    {
+        forkBombActive = false;
+        forkBombWavePending = false;
+        if (forkBombRoutine != null)
+        {
+            StopCoroutine(forkBombRoutine);
+            forkBombRoutine = null;
+        }
+
+        if (!clearSettings)
+            return;
+
+        forkBombTinyPrefab = null;
+    }
+
+    IEnumerator ForkBombSpawnRoutine()
+    {
+        while (!cleared && forkBombActive)
+        {
+            if (!HasLivingNonTinyEnemies())
+                break;
+
+            yield return new WaitForSeconds(forkBombSpawnInterval);
+
+            if (cleared || !forkBombActive || !HasLivingNonTinyEnemies())
+                break;
+
+            if (CountLivingTinies() >= forkBombMaxLivingTinies)
+                continue;
+
+            List<PlannedSpawn> planned = PlanForkBombPack();
+            if (planned.Count == 0)
+                continue;
+
+            forkBombWavePending = true;
+            yield return SpawnPlannedWaveStaggered(planned, forkBombAttackDelay, allowCorruptedSavePick: false);
+            forkBombWavePending = false;
+
+            if (!started || cleared)
+                yield break;
+
+            if (livingEnemies.Count == 0 && !HasLivingNonTinyEnemies())
+            {
+                CompleteEncounter();
+                yield break;
+            }
+        }
+
+        forkBombActive = false;
+        forkBombRoutine = null;
+        forkBombWavePending = false;
+
+        if (!cleared && livingEnemies.Count == 0 && !bootLoopWavePending && !corruptedSavePending && !initialWavePending)
+            CompleteEncounter();
+    }
+
+    List<PlannedSpawn> PlanForkBombPack()
+    {
+        plannedSpawnBuffer.Clear();
+        if (forkBombTinyPrefab == null || room == null)
+            return plannedSpawnBuffer;
+
+        occupiedSpawnBuffer.Clear();
+        foreach (EnemyAI enemy in livingEnemies)
+        {
+            if (enemy != null && enemy.IsAlive)
+                occupiedSpawnBuffer.Add(enemy.transform.position);
+        }
+
+        PlayerController player = PlayerController.Instance;
+        Transform playerTransform = player != null ? player.transform : null;
+        int unusedOverclock = 0;
+        int unusedRepair = 0;
+        int unusedShielder = 0;
+
+        int minSize = Mathf.Max(1, forkBombPackMinSize);
+        int maxSize = Mathf.Max(minSize, forkBombPackMaxSize);
+        int remainingCap = Mathf.Max(0, forkBombMaxLivingTinies - CountLivingTinies());
+        int packSize = Mathf.Min(Random.Range(minSize, maxSize + 1), remainingCap);
+        if (packSize <= 0)
+            return plannedSpawnBuffer;
+
+        if (!TryChooseRandomSpawnPosition(forkBombTinyPrefab, occupiedSpawnBuffer, playerTransform, out Vector3 anchor))
+            return plannedSpawnBuffer;
+
+        AddPlannedSpawn(
+            forkBombTinyPrefab,
+            anchor,
+            occupiedSpawnBuffer,
+            plannedSpawnBuffer,
+            ref unusedOverclock,
+            ref unusedRepair,
+            ref unusedShielder);
+
+        float clusterRadius = Mathf.Max(0.5f, tinyPackClusterRadius);
+        for (int i = 1; i < packSize; i++)
+        {
+            if (!TryChoosePackMatePosition(
+                    forkBombTinyPrefab,
+                    anchor,
+                    clusterRadius,
+                    occupiedSpawnBuffer,
+                    playerTransform,
+                    out Vector3 matePosition))
+                continue;
+
+            AddPlannedSpawn(
+                forkBombTinyPrefab,
+                matePosition,
+                occupiedSpawnBuffer,
+                plannedSpawnBuffer,
+                ref unusedOverclock,
+                ref unusedRepair,
+                ref unusedShielder);
+        }
+
+        return plannedSpawnBuffer;
+    }
+
+    bool HasLivingNonTinyEnemies()
+    {
+        foreach (EnemyAI enemy in livingEnemies)
+        {
+            if (enemy == null || !enemy.IsAlive)
+                continue;
+            if (enemy is TinyEnemyAI)
+                continue;
+            return true;
+        }
+
+        return false;
+    }
+
+    int CountLivingTinies()
+    {
+        int count = 0;
+        foreach (EnemyAI enemy in livingEnemies)
+        {
+            if (enemy is TinyEnemyAI tiny && tiny.IsAlive)
+                count++;
+        }
+
+        return count;
+    }
+
     IEnumerator SpawnBootLoopWaveRoutine()
     {
         List<PlannedSpawn> planned = new List<PlannedSpawn>(PlanWaveSpawns(includeBonuses: false));
@@ -529,10 +741,133 @@ public class RoomEncounter : MonoBehaviour
             if (prefab == null)
                 continue;
 
+            if (IsTinyEnemyPrefab(prefab))
+            {
+                TryPlanTinyPack(
+                    prefab,
+                    occupiedSpawnBuffer,
+                    playerTransform,
+                    plannedSpawnBuffer,
+                    ref spawnedOverclock,
+                    ref spawnedRepair,
+                    ref spawnedShielder);
+                continue;
+            }
+
             TryPlanSpawn(prefab, occupiedSpawnBuffer, playerTransform, plannedSpawnBuffer, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
         }
 
         return plannedSpawnBuffer;
+    }
+
+    bool IsTinyEnemyPrefab(GameObject prefab)
+    {
+        return GetPrefabAi(prefab) is TinyEnemyAI;
+    }
+
+    void TryPlanTinyPack(
+        GameObject prefab,
+        List<Vector3> occupiedPositions,
+        Transform player,
+        List<PlannedSpawn> planned,
+        ref int spawnedOverclock,
+        ref int spawnedRepair,
+        ref int spawnedShielder)
+    {
+        int minSize = Mathf.Max(1, tinyPackMinSize);
+        int maxSize = Mathf.Max(minSize, tinyPackMaxSize);
+        int packSize = Random.Range(minSize, maxSize + 1);
+
+        if (!TryChooseRandomSpawnPosition(prefab, occupiedPositions, player, out Vector3 anchor))
+        {
+            Debug.LogWarning(
+                $"Could not find a valid NavMesh spawn point for tiny pack ({prefab.name}) in {room.name}.",
+                this);
+            return;
+        }
+
+        AddPlannedSpawn(prefab, anchor, occupiedPositions, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+
+        float clusterRadius = Mathf.Max(0.5f, tinyPackClusterRadius);
+        for (int i = 1; i < packSize; i++)
+        {
+            if (!TryChoosePackMatePosition(prefab, anchor, clusterRadius, occupiedPositions, player, out Vector3 matePosition))
+                continue;
+
+            AddPlannedSpawn(prefab, matePosition, occupiedPositions, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+        }
+    }
+
+    void AddPlannedSpawn(
+        GameObject prefab,
+        Vector3 spawnPosition,
+        List<Vector3> occupiedPositions,
+        List<PlannedSpawn> planned,
+        ref int spawnedOverclock,
+        ref int spawnedRepair,
+        ref int spawnedShielder)
+    {
+        occupiedPositions.Add(spawnPosition);
+        CountBuffSpawn(GetPrefabAi(prefab), ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+        planned.Add(new PlannedSpawn
+        {
+            Prefab = prefab,
+            Position = spawnPosition,
+            MarkerRadius = EstimateMarkerRadius(prefab)
+        });
+    }
+
+    bool TryChoosePackMatePosition(
+        GameObject prefab,
+        Vector3 anchor,
+        float clusterRadius,
+        List<Vector3> occupiedPositions,
+        Transform player,
+        out Vector3 spawnPosition)
+    {
+        spawnPosition = anchor;
+        float minSeparation = Mathf.Max(0.75f, minimumSpawnSeparation * 0.45f);
+
+        for (int attempt = 0; attempt < spawnAttemptsPerEnemy; attempt++)
+        {
+            Vector2 disk = Random.insideUnitCircle * clusterRadius;
+            Vector3 candidate = anchor + new Vector3(disk.x, 0f, disk.y);
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, clusterRadius, NavMesh.AllAreas))
+                continue;
+
+            spawnPosition = hit.position;
+            if (!IsSpawnClearOfOccupied(spawnPosition, occupiedPositions, minSeparation))
+                continue;
+
+            if (player != null)
+            {
+                Vector3 toPlayer = spawnPosition - player.position;
+                toPlayer.y = 0f;
+                if (toPlayer.sqrMagnitude < minimumPlayerDistance * minimumPlayerDistance)
+                    continue;
+            }
+
+            if (room != null && spawnPosition.y - room.transform.position.y > maximumSpawnHeight)
+                continue;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    bool IsSpawnClearOfOccupied(Vector3 position, List<Vector3> occupiedPositions, float minSeparation)
+    {
+        float minSeparationSq = minSeparation * minSeparation;
+        for (int i = 0; i < occupiedPositions.Count; i++)
+        {
+            Vector3 offset = position - occupiedPositions[i];
+            offset.y = 0f;
+            if (offset.sqrMagnitude < minSeparationSq)
+                return false;
+        }
+
+        return true;
     }
 
     void TryPlanSpawn(
@@ -773,6 +1108,10 @@ public class RoomEncounter : MonoBehaviour
                 continue;
 
             if (!CanSpawnBuffPrefab(prefab, spawnedOverclock, spawnedRepair, spawnedShielder))
+                continue;
+
+            // Fork Bomb rooms drip tinies over time; keep the initial wave non-tiny.
+            if (roomModifier == RoomModifierType.ForkBomb && IsTinyEnemyPrefab(prefab))
                 continue;
 
             eligiblePrefabBuffer.Add(prefab);
@@ -1054,6 +1393,7 @@ public class RoomEncounter : MonoBehaviour
         bootLoopWavePending = false;
         initialWavePending = false;
         corruptedSavePending = false;
+        StopForkBomb(clearSettings: false);
         ClearSpawnMarkers();
         EndPacketLossEffect();
         SetDoorsLocked(false);

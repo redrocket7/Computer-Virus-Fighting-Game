@@ -512,6 +512,7 @@ MonoBehaviour:
   - {fileID: 1771518582702127463, guid: 5b353fdee447c0346a03b2fd238a61d2, type: 3}
   - {fileID: 1771518582702127463, guid: 4d282da75a9057c4cb26f1ac24024311, type: 3}
   - {fileID: 1771518582702127463, guid: 9d8923f811322114db031e454a650c8e, type: 3}
+  - {fileID: 1771518582702127463, guid: b15bcfbe3c7ddb74687c9f5744e561e3, type: 3}
   - {fileID: 1771518582702127463, guid: 82a0dcc3ea5fdc94a9d79f850b4d072b, type: 3}
   - {fileID: 1771518582702127463, guid: 9a36963dafed6654caa4555cf01b5c09, type: 3}
   - {fileID: 1771518582702127463, guid: 0a1aa12b39a86d24092b56a47a34f6b6, type: 3}
@@ -543,15 +544,15 @@ MonoBehaviour:
   megaEnemySpawnChance: 1
   excludeStartRoomForMega: 1
   megaMinimumDepth: 4
-  targetRoomCount: 20
+  targetRoomCount: 100
   maxPlacementAttempts: 2000
-  overlapPadding: 10
-  seed: 1
-  minimumPassageChunks: 20
+  overlapPadding: 6
+  seed: 0
+  minimumPassageChunks: 25
   maximumPassageChunks: 120
   maximumPassageTurns: 2
-  minimumStraightsAtDoors: 20
-  minimumStraightsBetweenTurns: 20
+  minimumStraightsAtDoors: 25
+  minimumStraightsBetweenTurns: 25
   passageOverlapPadding: 1
   scaleSpawnCountByDepth: 1
   extraEnemiesPerDepth: 1
@@ -559,7 +560,7 @@ MonoBehaviour:
   scaleEnemyMixByDepth: 1
   enemyMixFullDepth: 8
   easyThreatExponent: -1.25
-  hardThreatExponent: 1.4
+  hardThreatExponent: 1.5
   raidArrayChance: 0.1
   bootLoopChance: 0.1
   bootLoopExtraWaves: 1
@@ -571,6 +572,12 @@ MonoBehaviour:
   corruptedSaveHealthMultiplier: 0.5
   corruptedSaveSpeedMultiplier: 1.4
   corruptedSaveRespawnDelay: 1
+  forkBombChance: 0.1
+  forkBombSpawnInterval: 2
+  forkBombAttackDelay: 1
+  forkBombPackMinSize: 3
+  forkBombPackMaxSize: 10
+  forkBombMaxLivingTinies: 50
   excludeStartRoomForModifiers: 1
   scaleModifiersByDepth: 1
   modifierFullDepth: 8
@@ -600,7 +607,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   player: {fileID: 1288065130}
-  enableFogCover: 1
+  enableFogCover: 0
   fogCoverMaterial: {fileID: 2100000, guid: 80ff4075a157b754c9f065444bfbb63e, type: 2}
   fogCoverColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
   fogOverrideMaterialColor: 1
