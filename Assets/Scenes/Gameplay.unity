@@ -544,7 +544,7 @@ MonoBehaviour:
   megaEnemySpawnChance: 1
   excludeStartRoomForMega: 1
   megaMinimumDepth: 4
-  targetRoomCount: 100
+  targetRoomCount: 20
   maxPlacementAttempts: 2000
   overlapPadding: 6
   seed: 0
@@ -607,7 +607,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   player: {fileID: 1288065130}
-  enableFogCover: 0
+  enableFogCover: 1
   fogCoverMaterial: {fileID: 2100000, guid: 80ff4075a157b754c9f065444bfbb63e, type: 2}
   fogCoverColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
   fogOverrideMaterialColor: 1
