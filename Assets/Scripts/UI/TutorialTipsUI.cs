@@ -193,7 +193,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "SUPPORT",
+            Category = "CHASE",
             Name = "Transfer",
             Description =
                 "Redirects incoming damage to the lowest-HP ally in the room until its transfer meter overloads.\n\n" +
@@ -201,7 +201,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Small",
             Description =
                 "Basic chase process. Low health, closes distance, and deals contact damage.\n\n" +
@@ -209,7 +209,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Fat",
             Description =
                 "Tanky chase process with high health and low speed.\n\n" +
@@ -217,7 +217,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Long",
             Description =
                 "Elongated chase process with medium health and high speed.\n\n" +
@@ -225,7 +225,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Fork",
             Description =
                 "Chase process spawned by Branch enemies.\n\n" +
@@ -233,7 +233,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Tiny",
             Description =
                 "Small pack hunters that try to stick together in groups of about 3-4.\n\n" +
@@ -241,7 +241,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Dodge",
             Description =
                 "Melee chaser that sidesteps incoming player bullets.\n\n" +
@@ -249,7 +249,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Ram",
             Description =
                 "Chases up close. From longer range it winds up, then charges in a straight ram.\n\n" +
@@ -257,7 +257,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Bomb",
             Description =
                 "Chases normally, then arms a short fuse when close or when damaged.\n\n" +
@@ -265,7 +265,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Zip Bomb",
             Description =
                 "Absorbs your damage into a growing body. When storage is full, the next hit detonates it.\n\n" +
@@ -273,7 +273,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Branch",
             Description =
                 "Chase enemy that slowly spawns Fork processes while alive.\n\n" +
@@ -281,7 +281,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Category = "NORMAL",
+            Category = "CHASE",
             Name = "Trojanspawn",
             Description =
                 "Chase enemy that releases 2-4 Tiny enemies on death (3 is most common).\n\n" +
