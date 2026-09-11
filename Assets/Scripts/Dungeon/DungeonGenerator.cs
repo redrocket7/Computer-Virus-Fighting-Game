@@ -88,7 +88,7 @@ public class DungeonGenerator : MonoBehaviour
 
     [Header("Room Modifiers")]
     [Range(0f, 1f)]
-    [Tooltip("Base chance each combat room becomes a RAID Array (guaranteed Repair or Overclock).")]
+    [Tooltip("Base chance each combat room becomes a RAID Array (guarantees Repair, Overclock, and Shielder).")]
     [SerializeField] float raidArrayChance = 0.25f;
     [Range(0f, 1f)]
     [Tooltip("Base chance each combat room becomes a Boot Loop (another enemy wave after the first pack dies).")]

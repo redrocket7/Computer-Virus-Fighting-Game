@@ -6,7 +6,7 @@ using UnityEngine.AI;
 public enum RoomModifierType
 {
     None = 0,
-    /// <summary>Guarantees an extra Repair or Overclock support in the room.</summary>
+    /// <summary>Guarantees Repair, Overclock, and Shielder supports in the room.</summary>
     RaidArray = 1,
     /// <summary>When the current pack dies, another wave of enemies spawns.</summary>
     BootLoop = 2,
@@ -130,6 +130,22 @@ public class RoomEncounter : MonoBehaviour
     public int EncounterDepth => encounterDepth;
     public event System.Action Started;
     public event System.Action Cleared;
+
+    /// <summary>Fired when a combat room with a non-None modifier begins.</summary>
+    public static event System.Action<RoomModifierType> ModifierEncounterStarted;
+
+    public static string GetModifierDisplayName(RoomModifierType type)
+    {
+        return type switch
+        {
+            RoomModifierType.RaidArray => "RAID Array",
+            RoomModifierType.BootLoop => "Boot Loop",
+            RoomModifierType.PacketLoss => "Packet Loss",
+            RoomModifierType.CorruptedSave => "Corrupted Save",
+            RoomModifierType.ForkBomb => "Fork Bomb",
+            _ => type.ToString()
+        };
+    }
 
     public void GetLivingEnemies(List<EnemyAI> results)
     {
@@ -361,6 +377,8 @@ public class RoomEncounter : MonoBehaviour
         SetDoorsLocked(true);
         BeginPacketLossEffect();
         InfectionReport.RecordRoomEntered(encounterDepth, roomModifier);
+        if (roomModifier != RoomModifierType.None)
+            ModifierEncounterStarted?.Invoke(roomModifier);
         Started?.Invoke();
         StartCoroutine(SpawnInitialWaveRoutine());
     }
@@ -723,11 +741,7 @@ public class RoomEncounter : MonoBehaviour
             TryPlanSpawn(bonusMegaPrefab, occupiedSpawnBuffer, playerTransform, plannedSpawnBuffer, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
 
         if (hasRaidSupport)
-        {
-            GameObject support = ChooseRaidSupportPrefab(spawnedOverclock, spawnedRepair, spawnedShielder);
-            if (support != null)
-                TryPlanSpawn(support, occupiedSpawnBuffer, playerTransform, plannedSpawnBuffer, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
-        }
+            PlanRaidSupportSpawns(occupiedSpawnBuffer, playerTransform, plannedSpawnBuffer, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
 
         if (!hasNormalPool)
             return plannedSpawnBuffer;
@@ -1051,12 +1065,45 @@ public class RoomEncounter : MonoBehaviour
         SpawnPlannedWave(planned, holdoff, allowCorruptedSavePick: includeBonuses);
     }
 
-    GameObject ChooseRaidSupportPrefab(int spawnedOverclock, int spawnedRepair, int spawnedShielder)
+    void PlanRaidSupportSpawns(
+        List<Vector3> occupiedPositions,
+        Transform player,
+        List<PlannedSpawn> planned,
+        ref int spawnedOverclock,
+        ref int spawnedRepair,
+        ref int spawnedShielder)
+    {
+        // RAID Array guarantees one of each support type when their prefabs exist.
+        TryPlanRaidSupportOfType<RepairEnemyAI>(occupiedPositions, player, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+        TryPlanRaidSupportOfType<OverclockEnemyAI>(occupiedPositions, player, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+        TryPlanRaidSupportOfType<ShielderEnemyAI>(occupiedPositions, player, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+    }
+
+    void TryPlanRaidSupportOfType<TSupport>(
+        List<Vector3> occupiedPositions,
+        Transform player,
+        List<PlannedSpawn> planned,
+        ref int spawnedOverclock,
+        ref int spawnedRepair,
+        ref int spawnedShielder)
+        where TSupport : EnemyAI
+    {
+        GameObject prefab = FindSupportPrefabOfType<TSupport>(spawnedOverclock, spawnedRepair, spawnedShielder);
+        if (prefab == null)
+            return;
+
+        TryPlanSpawn(prefab, occupiedPositions, player, planned, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+    }
+
+    GameObject FindSupportPrefabOfType<TSupport>(
+        int spawnedOverclock,
+        int spawnedRepair,
+        int spawnedShielder)
+        where TSupport : EnemyAI
     {
         if (enemyPrefabs == null || enemyPrefabs.Length == 0)
             return null;
 
-        var supports = new List<GameObject>(4);
         for (int i = 0; i < enemyPrefabs.Length; i++)
         {
             GameObject prefab = enemyPrefabs[i];
@@ -1064,19 +1111,16 @@ public class RoomEncounter : MonoBehaviour
                 continue;
 
             EnemyAI ai = GetPrefabAi(prefab);
-            if (ai == null || !ai.IsSupportEnemy)
+            if (ai is not TSupport)
                 continue;
 
             if (!CanSpawnBuffPrefab(prefab, spawnedOverclock, spawnedRepair, spawnedShielder))
                 continue;
 
-            supports.Add(prefab);
+            return prefab;
         }
 
-        if (supports.Count == 0)
-            return null;
-
-        return supports[Random.Range(0, supports.Count)];
+        return null;
     }
 
     void TryGrantRandomShield(EnemyAI ai)
@@ -1159,6 +1203,19 @@ public class RoomEncounter : MonoBehaviour
         int spawnedShielder)
     {
         EnemyAI ai = GetPrefabAi(prefab);
+        bool isSupport = ai is OverclockEnemyAI || ai is RepairEnemyAI || ai is ShielderEnemyAI;
+        if (!isSupport)
+            return true;
+
+        // Normal rooms: at most one support enemy total across all three types.
+        // RAID Array rooms: one of each type (enforced by the per-type caps below).
+        if (roomModifier != RoomModifierType.RaidArray)
+        {
+            int totalSupports = spawnedOverclock + spawnedRepair + spawnedShielder;
+            if (totalSupports >= 1)
+                return false;
+        }
+
         if (ai is OverclockEnemyAI)
             return spawnedOverclock < maxOverclockPerRoom;
         if (ai is RepairEnemyAI)

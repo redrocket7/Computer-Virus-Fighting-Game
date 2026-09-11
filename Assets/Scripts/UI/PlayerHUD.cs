@@ -29,16 +29,22 @@ public class PlayerHUD : MonoBehaviour
     [SerializeField] Color restartButtonColor = new Color(0.18f, 0.18f, 0.2f, 0.95f);
     [SerializeField] Color restartLabelColor = Color.white;
 
+    [Header("Room Modifier Banner")]
+    [SerializeField] float modifierBannerDuration = 3.25f;
+
     RectTransform healthFill;
     Image healthFillImage;
     Text healthLabel;
     Text weaponLabel;
     Text infectionReportLabel;
     GameObject gameOverRoot;
+    GameObject modifierBannerRoot;
+    Text modifierBannerLabel;
     Button restartButton;
     Font font;
     bool isGameOver;
     bool boundToPlayer;
+    float modifierBannerHideAt = -1f;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void RegisterSceneHook()
@@ -60,16 +66,18 @@ public class PlayerHUD : MonoBehaviour
 
     public static void EnsureExists()
     {
-        if (FindAnyObjectByType<PlayerHUD>() != null)
-            return;
-
         if (FindAnyObjectByType<PlayerController>() == null)
             return;
 
-        var hud = new GameObject("Player HUD", typeof(Canvas));
-        hud.AddComponent<PlayerHUD>();
-        hud.AddComponent<DungeonMinimap>();
-        hud.AddComponent<DungeonMapOverlay>();
+        if (FindAnyObjectByType<PlayerHUD>() == null)
+        {
+            var hud = new GameObject("Player HUD", typeof(Canvas));
+            hud.AddComponent<PlayerHUD>();
+            hud.AddComponent<DungeonMinimap>();
+            hud.AddComponent<DungeonMapOverlay>();
+        }
+
+        TutorialTipsUI.EnsureExists();
     }
 
     void Awake()
@@ -79,12 +87,15 @@ public class PlayerHUD : MonoBehaviour
         BuildCanvas();
         BuildHealthBar();
         BuildWeaponLabel();
+        BuildModifierBanner();
         BuildGameOverBanner();
     }
 
     void OnEnable()
     {
         BindToPlayer();
+        RoomEncounter.ModifierEncounterStarted -= OnModifierEncounterStarted;
+        RoomEncounter.ModifierEncounterStarted += OnModifierEncounterStarted;
     }
 
     void Start()
@@ -95,6 +106,7 @@ public class PlayerHUD : MonoBehaviour
 
     void OnDisable()
     {
+        RoomEncounter.ModifierEncounterStarted -= OnModifierEncounterStarted;
         UnbindFromPlayer();
     }
 
@@ -143,11 +155,36 @@ public class PlayerHUD : MonoBehaviour
 
     void Update()
     {
+        if (modifierBannerRoot != null &&
+            modifierBannerRoot.activeSelf &&
+            modifierBannerHideAt >= 0f &&
+            Time.unscaledTime >= modifierBannerHideAt)
+        {
+            HideModifierBanner();
+        }
+
         if (!isGameOver)
             return;
 
         if (WasRestartPressed())
             RestartRun();
+    }
+
+    void OnModifierEncounterStarted(RoomModifierType modifier)
+    {
+        if (modifier == RoomModifierType.None || modifierBannerRoot == null || modifierBannerLabel == null)
+            return;
+
+        modifierBannerLabel.text = RoomEncounter.GetModifierDisplayName(modifier).ToUpperInvariant();
+        modifierBannerRoot.SetActive(true);
+        modifierBannerHideAt = Time.unscaledTime + Mathf.Max(0.5f, modifierBannerDuration);
+    }
+
+    void HideModifierBanner()
+    {
+        modifierBannerHideAt = -1f;
+        if (modifierBannerRoot != null)
+            modifierBannerRoot.SetActive(false);
     }
 
     void OnHealthChanged(float current, float max)
@@ -176,8 +213,37 @@ public class PlayerHUD : MonoBehaviour
         weaponLabel.text = string.IsNullOrEmpty(weaponName) ? string.Empty : weaponName.ToUpperInvariant();
     }
 
+    void BuildModifierBanner()
+    {
+        Image background = CreateImage("Room Modifier Banner", transform, new Color(0.05f, 0.08f, 0.09f, 0.88f));
+        RectTransform backgroundRect = background.rectTransform;
+        backgroundRect.anchorMin = new Vector2(0.5f, 1f);
+        backgroundRect.anchorMax = new Vector2(0.5f, 1f);
+        backgroundRect.pivot = new Vector2(0.5f, 1f);
+        backgroundRect.anchoredPosition = new Vector2(0f, -22f);
+        backgroundRect.sizeDelta = new Vector2(420f, 48f);
+
+        modifierBannerLabel = CreateText(
+            "Name",
+            backgroundRect,
+            string.Empty,
+            26,
+            new Color(0.55f, 0.95f, 0.78f),
+            TextAnchor.MiddleCenter);
+        modifierBannerLabel.fontStyle = FontStyle.Bold;
+        RectTransform labelRect = modifierBannerLabel.rectTransform;
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = new Vector2(16f, 0f);
+        labelRect.offsetMax = new Vector2(-16f, 0f);
+
+        modifierBannerRoot = background.gameObject;
+        modifierBannerRoot.SetActive(false);
+    }
+
     void OnPlayerDied()
     {
+        HideModifierBanner();
         RefreshInfectionReport();
         SetGameOverVisible(true);
     }

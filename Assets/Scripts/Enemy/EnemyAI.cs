@@ -94,6 +94,11 @@ public class EnemyAI : MonoBehaviour, IDamageable
     /// <summary>Repair / Overclock-style supports. Other supports won't cling to these.</summary>
     public virtual bool IsSupportEnemy => false;
 
+    /// <summary>
+    /// When false, Transfer enemies will not redirect incoming damage onto this unit.
+    /// </summary>
+    public virtual bool CanBeTransferDamageTarget => true;
+
     protected virtual void Update()
     {
         TickHoldoff();

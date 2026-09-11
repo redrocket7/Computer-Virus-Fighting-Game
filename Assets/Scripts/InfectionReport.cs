@@ -201,16 +201,6 @@ public static class InfectionReport
         return string.Join(", ", UpgradeNames);
     }
 
-    static string ModifierDisplayName(RoomModifierType type)
-    {
-        return type switch
-        {
-            RoomModifierType.RaidArray => "RAID",
-            RoomModifierType.BootLoop => "Boot Loop",
-            RoomModifierType.PacketLoss => "Packet Loss",
-            RoomModifierType.CorruptedSave => "Corrupted Save",
-            RoomModifierType.ForkBomb => "Fork Bomb",
-            _ => type.ToString()
-        };
-    }
+    static string ModifierDisplayName(RoomModifierType type) =>
+        RoomEncounter.GetModifierDisplayName(type);
 }

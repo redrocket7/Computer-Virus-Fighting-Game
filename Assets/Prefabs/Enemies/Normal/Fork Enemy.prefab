@@ -44,7 +44,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88cf6bc90c9dc9d46846b6302f620fce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLegStepper
-  stepDistance: 1.4
+  stepDistance: 1.6
   stepDuration: 0.2
   stepHeight: 0.1
   overshootMultiplier: 0
@@ -527,7 +527,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88cf6bc90c9dc9d46846b6302f620fce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLegStepper
-  stepDistance: 1.4
+  stepDistance: 1.6
   stepDuration: 0.2
   stepHeight: 0.1
   overshootMultiplier: 0
@@ -672,7 +672,7 @@ MonoBehaviour:
   stepDelay: 0
   nextStepAtProgress: 0.5
   stanceRotationSpeed: 4
-  lookAheadTime: 0.35
+  lookAheadTime: 0.3
   lookAheadMinSpeed: 0.15
   bodyMesh: {fileID: 0}
   tiltSmoothing: 6
@@ -2007,7 +2007,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88cf6bc90c9dc9d46846b6302f620fce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLegStepper
-  stepDistance: 1.4
+  stepDistance: 1.6
   stepDuration: 0.2
   stepHeight: 0.1
   overshootMultiplier: 0
@@ -2202,7 +2202,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88cf6bc90c9dc9d46846b6302f620fce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLegStepper
-  stepDistance: 1.4
+  stepDistance: 1.6
   stepDuration: 0.2
   stepHeight: 0.1
   overshootMultiplier: 0
