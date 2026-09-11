@@ -4,7 +4,7 @@ using UnityEngine.AI;
 
 /// <summary>
 /// Ranged Transfer variant: fires predicted three-round bursts.
-/// Once health drops to a threshold, further damage is redirected to another enemy.
+/// Redirects incoming damage to the weakest ally until overload, like Transfer.
 /// </summary>
 public class LinkGunEnemyAI : EnemyAI
 {
@@ -30,18 +30,23 @@ public class LinkGunEnemyAI : EnemyAI
     [SerializeField] float recoilRecoverTime = 0.1f;
 
     [Header("Damage Transfer")]
-    [Tooltip("Once health reaches this fraction of max (or lower), incoming damage is redirected to another enemy.")]
-    [SerializeField, Range(0.05f, 0.95f)] float transferHealthFraction = 0.5f;
     [Tooltip("Optional VFX played on the ally that receives redirected damage.")]
     [SerializeField] ParticleSystem transferEffect;
+    [Tooltip("Total damage that can be redirected before this enemy overloads and takes damage itself.")]
+    [SerializeField] float maxDamageBeforeOverload = 10f;
+    [Tooltip("How long overload lasts before transfers work again.")]
+    [SerializeField] float overloadDuration = 2.5f;
 
     float fireTimer;
     float repathTimer;
     int shotsFiredInBurst;
-    bool transferModeActive;
+    float damageRedirected;
+    float overloadTimer;
     Rigidbody playerBody;
     readonly List<EnemyAI> roomEnemies = new List<EnemyAI>();
     readonly EnemyMuzzleRecoil muzzleRecoil = new EnemyMuzzleRecoil();
+
+    bool IsOverloaded => overloadTimer > 0f;
 
     /// <summary>Transfer enemies must not dump redirected damage onto Link Guns.</summary>
     public override bool CanBeTransferDamageTarget => false;
@@ -50,11 +55,13 @@ public class LinkGunEnemyAI : EnemyAI
     {
         base.Start();
         muzzleRecoil.Bind(firePoint);
-        RefreshTransferMode();
     }
 
     protected override void Update()
     {
+        if (overloadTimer > 0f)
+            overloadTimer -= Time.deltaTime;
+
         TickHoldoff();
         if (!CanAct)
             return;
@@ -97,16 +104,12 @@ public class LinkGunEnemyAI : EnemyAI
         if (HasActiveShield)
         {
             base.TakeDamage(amount);
-            RefreshTransferMode();
             return;
         }
 
-        RefreshTransferMode();
-
-        if (!transferModeActive)
+        if (IsOverloaded)
         {
             base.TakeDamage(amount);
-            RefreshTransferMode();
             return;
         }
 
@@ -124,16 +127,13 @@ public class LinkGunEnemyAI : EnemyAI
         }
 
         target.TakeDamage(amount);
-    }
+        damageRedirected += amount;
 
-    void RefreshTransferMode()
-    {
-        if (transferModeActive || !IsAlive)
-            return;
-
-        float maxHp = Mathf.Max(0.01f, MaxHealth);
-        if (CurrentHealth / maxHp <= transferHealthFraction)
-            transferModeActive = true;
+        if (damageRedirected >= Mathf.Max(0.01f, maxDamageBeforeOverload))
+        {
+            damageRedirected = 0f;
+            overloadTimer = Mathf.Max(0.1f, overloadDuration);
+        }
     }
 
     EnemyAI FindTransferTarget()

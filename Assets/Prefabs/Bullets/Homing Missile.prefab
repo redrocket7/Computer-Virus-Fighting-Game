@@ -129,7 +129,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HomingMissile
   speed: 15
   lifetime: 5
-  damage: 2
+  damage: 1
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295

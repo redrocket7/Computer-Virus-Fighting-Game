@@ -128,7 +128,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SplitProjectile
   speed: 24
   lifetime: 3.5
-  damage: 3
+  damage: 2
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295

@@ -599,7 +599,7 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 2
-  m_Speed: 3.5
+  m_Speed: 3
   m_Acceleration: 8
   avoidancePriority: 50
   m_AngularSpeed: 120
@@ -717,8 +717,9 @@ MonoBehaviour:
     m_Bits: 4294967295
   recoilDistance: 0.28
   recoilRecoverTime: 0.1
-  transferHealthFraction: 0.95
   transferEffect: {fileID: 0}
+  maxDamageBeforeOverload: 10
+  overloadDuration: 2.5
 --- !u!65 &7806898481211741642
 BoxCollider:
   m_ObjectHideFlags: 0

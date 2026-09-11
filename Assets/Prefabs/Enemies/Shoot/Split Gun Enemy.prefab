@@ -961,7 +961,7 @@ MonoBehaviour:
   stepDelay: 0
   nextStepAtProgress: 0.4
   stanceRotationSpeed: 4
-  lookAheadTime: 0.75
+  lookAheadTime: 0.65
   lookAheadMinSpeed: 0.15
   bodyMesh: {fileID: 0}
   tiltSmoothing: 6
@@ -997,7 +997,7 @@ MonoBehaviour:
   projectileHeight: 1
   shootingRange: 28
   fireInterval: 2.8
-  aimLead: 0.1
+  aimLead: 0.2
   lineOfSightMask:
     serializedVersion: 2
     m_Bits: 4294967295

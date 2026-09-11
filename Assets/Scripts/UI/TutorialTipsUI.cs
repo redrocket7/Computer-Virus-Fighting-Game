@@ -160,6 +160,7 @@ public class TutorialTipsUI : MonoBehaviour
 
     struct EnemyInfo
     {
+        public string Category;
         public string Name;
         public string Description;
     }
@@ -168,6 +169,7 @@ public class TutorialTipsUI : MonoBehaviour
     {
         new EnemyInfo
         {
+            Category = "SUPPORT",
             Name = "Repair",
             Description =
                 "Support unit that stays near allies and heals damaged processes in range.\n\n" +
@@ -175,6 +177,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SUPPORT",
             Name = "Overclock",
             Description =
                 "Support unit that buffs random allies - damage, health, speed, fire rate, and specialty stats.\n\n" +
@@ -182,6 +185,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SUPPORT",
             Name = "Shielder",
             Description =
                 "Support unit that starts shielded and periodically grants shields to unprotected allies.\n\n" +
@@ -189,6 +193,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SUPPORT",
             Name = "Transfer",
             Description =
                 "Redirects incoming damage to the lowest-HP ally in the room until its transfer meter overloads.\n\n" +
@@ -196,13 +201,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
-            Name = "Link Gun",
-            Description =
-                "Ranged Transfer variant. Fires predicted three-round bursts while keeping its distance.\n\n" +
-                "Difficulty: 4"
-        },
-        new EnemyInfo
-        {
+            Category = "NORMAL",
             Name = "Small",
             Description =
                 "Basic chase process. Low health, closes distance, and deals contact damage.\n\n" +
@@ -210,6 +209,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Fat",
             Description =
                 "Tanky chase process with high health and low speed.\n\n" +
@@ -217,6 +217,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Long",
             Description =
                 "Elongated chase process with medium health and high speed.\n\n" +
@@ -224,6 +225,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Fork",
             Description =
                 "Chase process spawned by Branch enemies.\n\n" +
@@ -231,6 +233,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Tiny",
             Description =
                 "Small pack hunters that try to stick together in groups of about 3-4.\n\n" +
@@ -238,6 +241,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Dodge",
             Description =
                 "Melee chaser that sidesteps incoming player bullets.\n\n" +
@@ -245,6 +249,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Ram",
             Description =
                 "Chases up close. From longer range it winds up, then charges in a straight ram.\n\n" +
@@ -252,6 +257,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Bomb",
             Description =
                 "Chases normally, then arms a short fuse when close or when damaged.\n\n" +
@@ -259,6 +265,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Zip Bomb",
             Description =
                 "Absorbs your damage into a growing body. When storage is full, the next hit detonates it.\n\n" +
@@ -266,6 +273,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Branch",
             Description =
                 "Chase enemy that slowly spawns Fork processes while alive.\n\n" +
@@ -273,6 +281,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "NORMAL",
             Name = "Trojanspawn",
             Description =
                 "Chase enemy that releases 2-4 Tiny enemies on death (3 is most common).\n\n" +
@@ -280,6 +289,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Gun",
             Description =
                 "Ranged enemy that keeps mid-range and fires single projectiles.\n\n" +
@@ -287,6 +297,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Bounce Gun",
             Description =
                 "Gunner that fires bouncing shots and sidesteps incoming bullets like Dodge.\n\n" +
@@ -294,6 +305,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Machine Gun",
             Description =
                 "Keeps distance and sprays a rapid stream of bullets.\n\n" +
@@ -301,6 +313,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Shotgun",
             Description =
                 "Holds closer range and fires a short spread of pellets.\n\n" +
@@ -308,6 +321,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Split Gun",
             Description =
                 "Slow, heavy ranged attacker. Its shots split into fragments when they hit walls.\n\n" +
@@ -315,6 +329,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Homing Rocket",
             Description =
                 "Keeps distance and fires missiles that home toward you.\n\n" +
@@ -322,6 +337,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Cannon",
             Description =
                 "Slow ranged enemy that lobbs large cannonballs from long range.\n\n" +
@@ -329,6 +345,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Mortar",
             Description =
                 "Keeps distance and arcs explosive shells that detonate on arrival.\n\n" +
@@ -336,6 +353,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
             Name = "Gun Absorb",
             Description =
                 "Absorbs your bullet damage into storage, then spends it on charged shots.\n\n" +
@@ -343,6 +361,16 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "SHOOT",
+            Name = "Link Gun",
+            Description =
+                "Ranged Transfer variant. Fires predicted three-round bursts while keeping its distance.\n\n" +
+                "Redirects incoming damage to the lowest-HP ally until its transfer meter overloads, then must take damage itself.\n\n" +
+                "Difficulty: 4"
+        },
+        new EnemyInfo
+        {
+            Category = "MEGA",
             Name = "Mega Explosive",
             Description =
                 "Larger version of the mortar that fires shells in short bursts.\n\n" +
@@ -350,6 +378,7 @@ public class TutorialTipsUI : MonoBehaviour
         },
         new EnemyInfo
         {
+            Category = "MEGA",
             Name = "Mega Trojanspawn",
             Description =
                 "Huge trojanspawn that spawns Tiny enemies while alive, then splits into 2-3 Trojanspawns on death.\n\n" +
@@ -1179,23 +1208,53 @@ public class TutorialTipsUI : MonoBehaviour
         detailBodyRect.offsetMax = new Vector2(-22f, -64f);
 
         float buttonHeight = 44f;
+        float headerHeight = 28f;
         float buttonGap = 8f;
+        float headerGap = 12f;
         float topPadding = 6f;
         float bottomPadding = 6f;
+        float y = topPadding;
+        string lastCategory = null;
+
         for (int i = 0; i < EnemyInfos.Length; i++)
         {
+            EnemyInfo info = EnemyInfos[i];
+            string category = string.IsNullOrEmpty(info.Category) ? "OTHER" : info.Category;
+            if (category != lastCategory)
+            {
+                if (lastCategory != null)
+                    y += headerGap;
+
+                Text header = CreateText(
+                    $"Category_{category}",
+                    contentRect,
+                    category,
+                    15,
+                    new Color(0.55f, 0.95f, 0.78f, 0.9f),
+                    TextAnchor.MiddleLeft);
+                header.fontStyle = FontStyle.Bold;
+                RectTransform headerRect = header.rectTransform;
+                headerRect.anchorMin = new Vector2(0f, 1f);
+                headerRect.anchorMax = new Vector2(1f, 1f);
+                headerRect.pivot = new Vector2(0.5f, 1f);
+                headerRect.anchoredPosition = new Vector2(0f, -y);
+                headerRect.sizeDelta = new Vector2(-8f, headerHeight);
+                y += headerHeight + 4f;
+                lastCategory = category;
+            }
+
             int index = i;
             Button button = CreateButton(
                 $"Enemy_{i}",
                 contentRect,
-                EnemyInfos[i].Name.ToUpperInvariant(),
+                info.Name.ToUpperInvariant(),
                 new Color(0.14f, 0.28f, 0.38f, 0.98f),
                 Color.white);
             RectTransform buttonRect = button.GetComponent<RectTransform>();
             buttonRect.anchorMin = new Vector2(0f, 1f);
             buttonRect.anchorMax = new Vector2(1f, 1f);
             buttonRect.pivot = new Vector2(0.5f, 1f);
-            buttonRect.anchoredPosition = new Vector2(0f, -(topPadding + i * (buttonHeight + buttonGap)));
+            buttonRect.anchoredPosition = new Vector2(0f, -y);
             buttonRect.sizeDelta = new Vector2(0f, buttonHeight);
             Text label = button.GetComponentInChildren<Text>();
             if (label != null)
@@ -1209,13 +1268,11 @@ public class TutorialTipsUI : MonoBehaviour
 
             button.onClick.AddListener(() => SelectEnemy(index));
             enemyNameButtons.Add(button);
+            y += buttonHeight + buttonGap;
         }
 
-        float contentHeight = topPadding +
-                              EnemyInfos.Length * buttonHeight +
-                              Mathf.Max(0, EnemyInfos.Length - 1) * buttonGap +
-                              bottomPadding;
-        contentRect.sizeDelta = new Vector2(0f, contentHeight);
+        float contentHeight = y - buttonGap + bottomPadding;
+        contentRect.sizeDelta = new Vector2(0f, Mathf.Max(contentHeight, 0f));
 
         enemiesBackButton = CreateButton(
             "Back",
