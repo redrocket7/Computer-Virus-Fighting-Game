@@ -153,7 +153,7 @@ public class LinkGunEnemyAI : EnemyAI
                 continue;
 
             // Avoid bounce loops with Transfers / other Link Guns.
-            if (ally is TransferEnemyAI || ally is LinkGunEnemyAI || ally is MegaTransferEnemyAI || !ally.CanBeTransferDamageTarget)
+            if (ally is TransferEnemyAI || ally is LinkGunEnemyAI || !ally.CanBeTransferDamageTarget)
                 continue;
 
             if (ally.CurrentHealth < lowestHealth)

@@ -17,6 +17,8 @@ public class DamageContainerEnemyAI : EnemyAI
     [Header("Flee")]
     [SerializeField] float fleeDistance = 7f;
     [SerializeField] float fleeSampleRadius = 8f;
+    [Tooltip("Only path away when the player is within this range.")]
+    [SerializeField] float fleeTriggerRange = 14f;
 
     [Header("Explosion")]
     [SerializeField] GameObject explosionPrefab;
@@ -37,12 +39,15 @@ public class DamageContainerEnemyAI : EnemyAI
 
     static readonly Collider[] OverlapHits = new Collider[48];
     static readonly HashSet<IDamageable> DamagedBuffer = new HashSet<IDamageable>();
-    static readonly List<EnemyAI> NearbyEnemies = new List<EnemyAI>();
+    static readonly List<EnemyAI> NearbyEnemies = new List<EnemyAI>(16);
 
     Vector3 baseBodyLocalScale;
     Vector3 baseBodyLocalPosition;
 
     float storedDamage;
+    float triggerDistanceSq;
+    float fleeTriggerRangeSq;
+    float growthReferenceReciprocal;
     bool hasExploded;
     bool isFused;
     float fuseRemaining;
@@ -53,28 +58,55 @@ public class DamageContainerEnemyAI : EnemyAI
     protected override void Awake()
     {
         base.Awake();
+        CacheTuning();
         CacheVisualBaselines();
+    }
+
+    void CacheTuning()
+    {
+        float trigger = Mathf.Max(0.01f, triggerDistance);
+        triggerDistanceSq = trigger * trigger;
+
+        float fleeRange = Mathf.Max(trigger, fleeTriggerRange);
+        fleeTriggerRangeSq = fleeRange * fleeRange;
+
+        growthReferenceReciprocal = 1f / Mathf.Max(0.01f, growthReferenceDamage);
+        fleeDistance = Mathf.Max(1f, fleeDistance);
+        fleeSampleRadius = Mathf.Max(1f, fleeSampleRadius);
     }
 
     /// <summary>Path away from the player so containers are harder to proximity-fuse.</summary>
     protected override Vector3 GetChaseDestination(Transform chaseTarget)
     {
+        Vector3 myPos = transform.position;
         if (chaseTarget == null)
-            return transform.position;
+            return myPos;
 
-        Vector3 away = transform.position - chaseTarget.position;
+        Vector3 away = myPos - chaseTarget.position;
         away.y = 0f;
-        if (away.sqrMagnitude < 0.001f)
-            away = Random.insideUnitSphere;
-        away.y = 0f;
-        if (away.sqrMagnitude < 0.001f)
-            away = Vector3.forward;
+        float magSq = away.sqrMagnitude;
 
-        Vector3 desired = transform.position + away.normalized * Mathf.Max(1f, fleeDistance);
-        if (NavMesh.SamplePosition(desired, out NavMeshHit hit, Mathf.Max(1f, fleeSampleRadius), NavMesh.AllAreas))
+        // Idle when the player is far enough — skips NavMesh sampling.
+        if (magSq > fleeTriggerRangeSq)
+            return myPos;
+
+        if (magSq < 0.001f)
+        {
+            away = transform.forward;
+            away.y = 0f;
+            if (away.sqrMagnitude < 0.001f)
+                away = Vector3.forward;
+            magSq = away.sqrMagnitude;
+        }
+
+        away *= fleeDistance / Mathf.Sqrt(magSq);
+        Vector3 desired = myPos + away;
+
+        int areaMask = Agent != null ? Agent.areaMask : NavMesh.AllAreas;
+        if (NavMesh.SamplePosition(desired, out NavMeshHit hit, fleeSampleRadius, areaMask))
             return hit.position;
 
-        return transform.position;
+        return myPos;
     }
 
     void CacheVisualBaselines()
@@ -108,7 +140,7 @@ public class DamageContainerEnemyAI : EnemyAI
 
         Vector3 offset = Player.position - transform.position;
         offset.y = 0f;
-        if (offset.sqrMagnitude <= triggerDistance * triggerDistance)
+        if (offset.sqrMagnitude <= triggerDistanceSq)
             ArmFuse();
     }
 
@@ -119,13 +151,7 @@ public class DamageContainerEnemyAI : EnemyAI
 
         isFused = true;
         fuseRemaining = Mathf.Max(0.05f, fuseDuration);
-
-        if (Agent != null && Agent.isOnNavMesh)
-        {
-            Agent.isStopped = true;
-            if (Agent.hasPath)
-                Agent.ResetPath();
-        }
+        StopAgentPath();
     }
 
     public override void TakeDamage(float amount)
@@ -158,9 +184,7 @@ public class DamageContainerEnemyAI : EnemyAI
         if (!visualsInitialized)
             return;
 
-        float reference = Mathf.Max(0.01f, growthReferenceDamage);
-        float fill = 1f - (1f / (1f + storedDamage / reference));
-
+        float fill = 1f - (1f / (1f + storedDamage * growthReferenceReciprocal));
         bodyMesh.localScale = Vector3.Lerp(baseBodyLocalScale, maxBodyScale, fill);
         bodyMesh.localPosition = baseBodyLocalPosition + Vector3.up * (maxBodyLift * fill);
     }
@@ -171,9 +195,7 @@ public class DamageContainerEnemyAI : EnemyAI
             return;
 
         hasExploded = true;
-
-        if (Agent != null && Agent.isOnNavMesh)
-            Agent.isStopped = true;
+        StopAgentPath();
 
         float totalDamage = ScaleOutgoingDamage(
             baseExplosionDamage + storedDamage * storedDamageToExplosion);
@@ -246,6 +268,8 @@ public class DamageContainerEnemyAI : EnemyAI
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()
     {
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, fleeTriggerRange);
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, triggerDistance);
         Gizmos.color = Color.red;
@@ -254,6 +278,7 @@ public class DamageContainerEnemyAI : EnemyAI
 
     void OnValidate()
     {
+        CacheTuning();
         if (!Application.isPlaying)
             CacheVisualBaselines();
     }

@@ -87,8 +87,8 @@ public class TransferEnemyAI : EnemyAI
             if (ally == null || ally == this || !ally.IsAlive)
                 continue;
 
-            // Avoid bouncing damage between Transfer enemies, and never feed Link Guns / Mega Transfer.
-            if (ally is TransferEnemyAI || ally is MegaTransferEnemyAI || !ally.CanBeTransferDamageTarget)
+            // Avoid bouncing between Transfers; CanBeTransferDamageTarget covers Link Gun / Mega Transfer.
+            if (ally is TransferEnemyAI || !ally.CanBeTransferDamageTarget)
                 continue;
 
             if (ally.CurrentHealth < lowestHealth)

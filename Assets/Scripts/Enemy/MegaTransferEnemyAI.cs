@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
 /// Mega Transfer: tanks until half health, then summons damage containers and
@@ -15,8 +16,9 @@ public class MegaTransferEnemyAI : EnemyAI
     [SerializeField, Range(0.05f, 0.95f)] float containerSpawnHealthFraction = 0.5f;
     [SerializeField] int containerSpawnCount = 4;
 
-    readonly List<EnemyAI> roomEnemies = new List<EnemyAI>();
-    readonly List<Vector3> occupiedSpawnBuffer = new List<Vector3>();
+    readonly List<EnemyAI> roomEnemies = new List<EnemyAI>(16);
+    readonly List<DamageContainerEnemyAI> livingContainers = new List<DamageContainerEnemyAI>(8);
+    readonly List<Vector3> occupiedSpawnBuffer = new List<Vector3>(8);
     bool containersSpawned;
 
     /// <summary>Normal Transfers / Link Guns must not dump damage onto the mega.</summary>
@@ -63,8 +65,7 @@ public class MegaTransferEnemyAI : EnemyAI
         if (containersSpawned || !IsAlive)
             return;
 
-        float maxHp = Mathf.Max(0.01f, MaxHealth);
-        if (CurrentHealth / maxHp > containerSpawnHealthFraction)
+        if (CurrentHealth > MaxHealth * containerSpawnHealthFraction)
             return;
 
         SpawnDamageContainers();
@@ -77,74 +78,64 @@ public class MegaTransferEnemyAI : EnemyAI
         if (damageContainerPrefab == null || containerSpawnCount <= 0)
             return;
 
+        RoomEncounter encounter = BoundEncounter;
         occupiedSpawnBuffer.Clear();
         occupiedSpawnBuffer.Add(transform.position);
+        livingContainers.Clear();
 
-        int spawned = 0;
+        float angleStep = 360f / containerSpawnCount;
+        Vector3 selfPos = transform.position;
+
         for (int i = 0; i < containerSpawnCount; i++)
         {
-            Vector3 spawnPosition = transform.position;
-            bool placed = BoundEncounter != null &&
-                          BoundEncounter.TryChooseCombatSpawnPosition(
+            Vector3 spawnPosition = selfPos;
+            bool placed = encounter != null &&
+                          encounter.TryChooseCombatSpawnPosition(
                               damageContainerPrefab,
                               occupiedSpawnBuffer,
                               out spawnPosition);
 
             if (!placed)
             {
-                // Fallback near the mega if the room helper cannot place.
-                Vector3 offset = Quaternion.Euler(0f, i * (360f / Mathf.Max(1, containerSpawnCount)), 0f) * Vector3.forward * 4f;
-                spawnPosition = transform.position + offset;
-                if (UnityEngine.AI.NavMesh.SamplePosition(
-                        spawnPosition,
-                        out UnityEngine.AI.NavMeshHit hit,
-                        6f,
-                        UnityEngine.AI.NavMesh.AllAreas))
-                {
+                Vector3 offset = Quaternion.Euler(0f, i * angleStep, 0f) * Vector3.forward * 4f;
+                spawnPosition = selfPos + offset;
+                if (NavMesh.SamplePosition(spawnPosition, out NavMeshHit hit, 6f, NavMesh.AllAreas))
                     spawnPosition = hit.position;
-                }
             }
 
-            GameObject instance = Instantiate(
-                damageContainerPrefab,
-                spawnPosition,
-                Quaternion.identity);
+            GameObject instance = Instantiate(damageContainerPrefab, spawnPosition, Quaternion.identity);
+            DamageContainerEnemyAI container = instance.GetComponentInChildren<DamageContainerEnemyAI>();
 
-            EnemyAI child = instance.GetComponent<EnemyAI>() ?? instance.GetComponentInChildren<EnemyAI>();
-            if (child != null && BoundEncounter != null)
-                BoundEncounter.RegisterEnemy(child);
+            if (container != null)
+            {
+                livingContainers.Add(container);
+                if (encounter != null)
+                    encounter.RegisterEnemy(container);
+            }
 
             occupiedSpawnBuffer.Add(spawnPosition);
-            spawned++;
         }
-
-        if (spawned > 0)
-            Debug.Log($"{name} spawned {spawned} damage containers.", this);
     }
 
     EnemyAI FindTransferTarget()
     {
-        RoomEncounter encounter = BoundEncounter;
-        if (encounter == null)
-            return null;
-
-        encounter.GetLivingEnemies(roomEnemies);
-
-        // Prefer living damage containers (least stored first to spread load).
-        EnemyAI bestContainer = null;
+        // Prefer tracked containers (least stored first) without scanning the whole room.
+        DamageContainerEnemyAI bestContainer = null;
         float lowestStored = float.MaxValue;
-        for (int i = 0; i < roomEnemies.Count; i++)
+
+        for (int i = livingContainers.Count - 1; i >= 0; i--)
         {
-            EnemyAI ally = roomEnemies[i];
-            if (ally == null || ally == this || !ally.IsAlive)
-                continue;
-
-            if (ally is not DamageContainerEnemyAI container)
-                continue;
-
-            if (container.StoredDamage < lowestStored)
+            DamageContainerEnemyAI container = livingContainers[i];
+            if (container == null || !container.IsAlive)
             {
-                lowestStored = container.StoredDamage;
+                livingContainers.RemoveAt(i);
+                continue;
+            }
+
+            float stored = container.StoredDamage;
+            if (stored < lowestStored)
+            {
+                lowestStored = stored;
                 bestContainer = container;
             }
         }
@@ -152,26 +143,29 @@ public class MegaTransferEnemyAI : EnemyAI
         if (bestContainer != null)
             return bestContainer;
 
-        // Fallback: weakest valid non-transfer ally (same rules as Transfer).
+        RoomEncounter encounter = BoundEncounter;
+        if (encounter == null)
+            return null;
+
+        encounter.GetLivingEnemies(roomEnemies);
+
         EnemyAI weakest = null;
         float lowestHealth = float.MaxValue;
+
         for (int i = 0; i < roomEnemies.Count; i++)
         {
             EnemyAI ally = roomEnemies[i];
             if (ally == null || ally == this || !ally.IsAlive)
                 continue;
 
-            if (ally is TransferEnemyAI ||
-                ally is MegaTransferEnemyAI ||
-                ally is LinkGunEnemyAI ||
-                !ally.CanBeTransferDamageTarget)
-            {
+            // Skip other redirectors; CanBeTransferDamageTarget covers Link Gun / Mega Transfer.
+            if (ally is TransferEnemyAI || !ally.CanBeTransferDamageTarget)
                 continue;
-            }
 
-            if (ally.CurrentHealth < lowestHealth)
+            float hp = ally.CurrentHealth;
+            if (hp < lowestHealth)
             {
-                lowestHealth = ally.CurrentHealth;
+                lowestHealth = hp;
                 weakest = ally;
             }
         }
