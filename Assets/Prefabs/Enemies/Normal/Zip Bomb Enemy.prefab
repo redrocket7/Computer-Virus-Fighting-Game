@@ -436,10 +436,10 @@ GameObject:
   - component: {fileID: 6929010665188915870}
   - component: {fileID: 4379296795305699013}
   - component: {fileID: 4354607952219119429}
-  - component: {fileID: 2525807994708376942}
+  - component: {fileID: -8126573439902279417}
   - component: {fileID: 7806898481211741642}
   m_Layer: 0
-  m_Name: 'Zip Bomb Enemy '
+  m_Name: Zip Bomb Enemy
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -564,7 +564,7 @@ MonoBehaviour:
   bodyMesh: {fileID: 5071466340973957121}
   tiltSmoothing: 1
   tiltUpdateInterval: 0.1
---- !u!114 &2525807994708376942
+--- !u!114 &-8126573439902279417
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -580,17 +580,17 @@ MonoBehaviour:
   pathRefreshInterval: 0.2
   maxHealth: 1
   difficulty: 4
-  contactDamage: 0
+  contactDamage: 1
   attackRange: 2
   attackInterval: 1
-  deathEffectPrefab: {fileID: 0}
+  deathEffectPrefab: {fileID: 512345678901234501, guid: b70891a2b3c4d5e6f708901a2b3c4d50, type: 3}
   deathEffectHeight: 0.35
   maxStoredDamage: 12
   absorbEffect: {fileID: 0}
   explosionPrefab: {fileID: 459251097015774743, guid: 881cc54299472544faf6f4804609619f, type: 3}
   triggerDistance: 2
   fuseDuration: 0.85
-  explosionRadius: 8
+  explosionRadius: 6
   baseExplosionDamage: 2
   storedDamageToExplosion: 0.35
   damageMask:
@@ -600,8 +600,8 @@ MonoBehaviour:
   explosionShakeStrength: 0.65
   explosionShakeRotation: 3.5
   bodyMesh: {fileID: 5071466340973957121}
-  maxBodyScale: {x: 2.4, y: 1.8, z: 2.4}
-  maxBodyLift: 1
+  maxBodyScale: {x: 2.4, y: 2.4, z: 2.4}
+  maxBodyLift: 0.75
 --- !u!65 &7806898481211741642
 BoxCollider:
   m_ObjectHideFlags: 0

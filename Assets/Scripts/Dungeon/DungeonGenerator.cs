@@ -32,16 +32,16 @@ public class DungeonGenerator : MonoBehaviour
     [SerializeField] float shieldSpawnChance = 0.2f;
     [SerializeField] float shieldHealth = 4f;
 
-    [Header("Mega Enemies")]
-    [Tooltip("Boss-tier enemies. One may be assigned to a random combat room each dungeon.")]
+    [Header("Mega / Critical Process")]
+    [Tooltip("Boss-tier enemies used by the Critical Process room modifier.")]
     [SerializeField] GameObject[] megaEnemyPrefabs;
     [Range(0f, 1f)]
-    [Tooltip("Chance that this dungeon places one mega enemy in a random room.")]
+    [Tooltip("Base chance each eligible combat room becomes Critical Process (guarantees one mega). At most one per run.")]
     [SerializeField] float megaEnemySpawnChance = 0.35f;
-    [Tooltip("When enabled, the start room is never chosen for a mega spawn.")]
+    [Tooltip("When enabled, the start room never rolls Critical Process.")]
     [SerializeField] bool excludeStartRoomForMega = true;
     [Min(1)]
-    [Tooltip("Mega enemies only spawn in rooms at least this many door-hops from the start.")]
+    [Tooltip("Critical Process only rolls in rooms at least this many door-hops from the start.")]
     [SerializeField] int megaMinimumDepth = 4;
 
     [SerializeField] int targetRoomCount = 6;
@@ -253,7 +253,6 @@ public class DungeonGenerator : MonoBehaviour
         ApplyDepthSpawnScaling(depthByRoom);
         ApplyDepthEnemyMix(depthByRoom);
         AssignRoomModifiers(depthByRoom);
-        AssignMegaEnemy(depthByRoom);
         BuildNavigation();
         AssignHealthPickups();
         AssignUsbDashPickup();
@@ -312,42 +311,11 @@ public class DungeonGenerator : MonoBehaviour
         PassageFogCover.RefreshAll();
     }
 
-    void AssignMegaEnemy(Dictionary<RoomDefinition, int> depthByRoom)
-    {
-        if (megaEnemyPrefabs == null || megaEnemyPrefabs.Length == 0)
-        {
-            Debug.LogWarning("Mega spawn skipped: Mega Enemy Prefabs list is empty.", this);
-            return;
-        }
-
-        float chance = Mathf.Clamp01(megaEnemySpawnChance);
-        if (chance <= 0f || Random.value > chance)
-            return;
-
-        GameObject megaPrefab = ChooseMegaPrefab();
-        if (megaPrefab == null)
-        {
-            Debug.LogWarning("Mega spawn skipped: no valid mega prefab.", this);
-            return;
-        }
-
-        RoomDefinition host = ChooseMegaHostRoom(depthByRoom);
-        if (host == null)
-        {
-            Debug.LogWarning("Mega spawn skipped: no eligible combat room found.", this);
-            return;
-        }
-
-        RoomEncounter encounter = GetEncounter(host);
-        if (encounter == null || !encounter.enabled)
-            return;
-
-        encounter.SetBonusMegaEnemy(megaPrefab);
-        Debug.Log($"Mega enemy '{megaPrefab.name}' assigned to room '{host.name}'.", host);
-    }
-
     GameObject ChooseMegaPrefab()
     {
+        if (megaEnemyPrefabs == null || megaEnemyPrefabs.Length == 0)
+            return null;
+
         int valid = 0;
         for (int i = 0; i < megaEnemyPrefabs.Length; i++)
         {
@@ -371,57 +339,18 @@ public class DungeonGenerator : MonoBehaviour
         return null;
     }
 
-    RoomDefinition ChooseMegaHostRoom(Dictionary<RoomDefinition, int> depthByRoom)
+    bool MegaPoolHasPrefab()
     {
-        if (placedRooms.Count == 0)
-            return null;
+        if (megaEnemyPrefabs == null)
+            return false;
 
-        if (depthByRoom == null)
-            depthByRoom = BuildRoomDepthMap();
-
-        RoomDefinition start = placedRooms[0];
-
-        int minDepth = Mathf.Max(1, megaMinimumDepth);
-        var eligible = new List<RoomDefinition>();
-        var deepestFallback = new List<RoomDefinition>();
-        int deepestSeen = -1;
-
-        for (int i = 0; i < placedRooms.Count; i++)
+        for (int i = 0; i < megaEnemyPrefabs.Length; i++)
         {
-            RoomDefinition room = placedRooms[i];
-            if (room == null)
-                continue;
-
-            if (excludeStartRoomForMega && room == start)
-                continue;
-
-            RoomEncounter encounter = GetEncounter(room);
-            if (encounter == null || !encounter.enabled)
-                continue;
-
-            if (!depthByRoom.TryGetValue(room, out int depth))
-                depth = 0;
-
-            if (depth > deepestSeen)
-            {
-                deepestSeen = depth;
-                deepestFallback.Clear();
-                deepestFallback.Add(room);
-            }
-            else if (depth == deepestSeen)
-            {
-                deepestFallback.Add(room);
-            }
-
-            if (depth >= minDepth)
-                eligible.Add(room);
+            if (megaEnemyPrefabs[i] != null)
+                return true;
         }
 
-        List<RoomDefinition> pool = eligible.Count > 0 ? eligible : deepestFallback;
-        if (pool.Count == 0)
-            return null;
-
-        return pool[Random.Range(0, pool.Count)];
+        return false;
     }
 
     void ApplyDepthSpawnScaling(Dictionary<RoomDefinition, int> depthByRoom)
@@ -484,19 +413,24 @@ public class DungeonGenerator : MonoBehaviour
         float packetChance = Mathf.Clamp01(packetLossChance);
         float corruptedChance = Mathf.Clamp01(corruptedSaveChance);
         float forkBombRollChance = Mathf.Clamp01(forkBombChance);
+        float criticalChance = Mathf.Clamp01(megaEnemySpawnChance);
         if (raidChance <= 0f &&
             loopChance <= 0f &&
             packetChance <= 0f &&
             corruptedChance <= 0f &&
-            forkBombRollChance <= 0f)
+            forkBombRollChance <= 0f &&
+            criticalChance <= 0f)
             return;
 
         bool hasSupports = EnemyPoolHasSupportPrefab();
         GameObject tinyPrefab = FindTinyEnemyPrefab();
         bool hasTiny = tinyPrefab != null;
+        bool hasMegaPrefabs = MegaPoolHasPrefab();
+        bool criticalProcessAssigned = false;
         RoomDefinition start = placedRooms.Count > 0 ? placedRooms[0] : null;
-        var candidates = new List<RoomModifierType>(5);
+        var candidates = new List<RoomModifierType>(6);
         int fullDepth = Mathf.Max(1, modifierFullDepth);
+        int minMegaDepth = Mathf.Max(1, megaMinimumDepth);
 
         for (int i = 0; i < placedRooms.Count; i++)
         {
@@ -514,13 +448,13 @@ public class DungeonGenerator : MonoBehaviour
             if (encounter.RoomModifier != RoomModifierType.None)
                 continue;
 
+            int depth = 0;
+            if (depthByRoom != null)
+                depthByRoom.TryGetValue(room, out depth);
+
             float chanceScale = 1f;
             if (scaleModifiersByDepth)
             {
-                int depth = 0;
-                if (depthByRoom != null)
-                    depthByRoom.TryGetValue(room, out depth);
-
                 float depth01 = Mathf.Clamp01(depth / (float)fullDepth);
                 chanceScale = Mathf.Lerp(nearModifierChanceMultiplier, farModifierChanceMultiplier, depth01);
             }
@@ -530,6 +464,7 @@ public class DungeonGenerator : MonoBehaviour
             float scaledPacket = Mathf.Clamp01(packetChance * chanceScale);
             float scaledCorrupted = Mathf.Clamp01(corruptedChance * chanceScale);
             float scaledForkBomb = Mathf.Clamp01(forkBombRollChance * chanceScale);
+            float scaledCritical = Mathf.Clamp01(criticalChance * chanceScale);
 
             candidates.Clear();
             if (scaledRaid > 0f && Random.value <= scaledRaid)
@@ -549,6 +484,18 @@ public class DungeonGenerator : MonoBehaviour
 
             if (scaledForkBomb > 0f && Random.value <= scaledForkBomb && hasTiny)
                 candidates.Add(RoomModifierType.ForkBomb);
+
+            bool megaDepthOk = depth >= minMegaDepth;
+            bool megaStartOk = !excludeStartRoomForMega || room != start;
+            if (!criticalProcessAssigned &&
+                hasMegaPrefabs &&
+                megaDepthOk &&
+                megaStartOk &&
+                scaledCritical > 0f &&
+                Random.value <= scaledCritical)
+            {
+                candidates.Add(RoomModifierType.CriticalProcess);
+            }
 
             if (candidates.Count == 0)
                 continue;
@@ -581,6 +528,19 @@ public class DungeonGenerator : MonoBehaviour
                     forkBombPackMaxSize,
                     forkBombMaxLivingTinies);
             }
+            else if (chosen == RoomModifierType.CriticalProcess)
+            {
+                GameObject megaPrefab = ChooseMegaPrefab();
+                if (megaPrefab == null)
+                {
+                    encounter.SetRoomModifier(RoomModifierType.None);
+                    continue;
+                }
+
+                encounter.SetBonusMegaEnemy(megaPrefab);
+                criticalProcessAssigned = true;
+                Debug.Log($"Critical Process ({megaPrefab.name}) assigned to room '{room.name}'.", room);
+            }
 
             Debug.Log($"{chosen} assigned to room '{room.name}'.", room);
         }
@@ -596,6 +556,13 @@ public class DungeonGenerator : MonoBehaviour
         {
             Debug.LogWarning(
                 "Fork Bomb rolls skipped: enemy prefab pool has no TinyEnemyAI prefab.",
+                this);
+        }
+
+        if (criticalChance > 0f && !hasMegaPrefabs)
+        {
+            Debug.LogWarning(
+                "Critical Process rolls skipped: Mega Enemy Prefabs list is empty.",
                 this);
         }
     }

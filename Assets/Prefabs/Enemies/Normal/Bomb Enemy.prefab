@@ -587,7 +587,7 @@ MonoBehaviour:
   deathEffectHeight: 0.35
   explosionPrefab: {fileID: 459251097015774743, guid: 29863faaad50a814d9a12c2975079a99, type: 3}
   triggerDistance: 2
-  explosionRadius: 5
+  explosionRadius: 4
   explosionDamage: 2
   damageMask:
     serializedVersion: 2

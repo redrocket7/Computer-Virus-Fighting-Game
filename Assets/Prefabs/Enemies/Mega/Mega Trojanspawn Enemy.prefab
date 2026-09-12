@@ -811,8 +811,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MegaTrojanspawnEnemyAI
   player: {fileID: 0}
   pathRefreshInterval: 0.2
-  maxHealth: 40
-  contactDamage: 3
+  maxHealth: 45
+  difficulty: 5
+  contactDamage: 2
   attackRange: 3
   attackInterval: 1
   deathEffectPrefab: {fileID: 512345678901234501, guid: b70891a2b3c4d5e6f708901a2b3c4d50, type: 3}

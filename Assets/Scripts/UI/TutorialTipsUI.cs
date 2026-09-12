@@ -56,7 +56,7 @@ public class TutorialTipsUI : MonoBehaviour
             Body =
                 "Entering a hostile room locks the doors.\n\n" +
                 "Terminate every process to unlock exits.\n" +
-                "Watch for room modifiers - RAID, Boot Loop, Packet Loss, Corrupted Save, and Fork Bomb change the fight."
+                "Watch for room modifiers - RAID, Boot Loop, Packet Loss, Corrupted Save, Fork Bomb, and Critical Process change the fight."
         },
         new TutorialPage
         {
@@ -155,6 +155,13 @@ public class TutorialTipsUI : MonoBehaviour
             Description =
                 "Tiny enemies keep spawning until all non-tiny enemies are dead.\n\n" +
                 "Focus the larger threats first to stop the drip, then clean up leftover tinies."
+        },
+        new ModifierInfo
+        {
+            Name = "Critical Process",
+            Description =
+                "Guarantees a mega enemy in this room.\n\n" +
+                "At most one Critical Process room appears per run. Treat it as a boss fight and clear supports around it first."
         }
     };
 
@@ -383,6 +390,22 @@ public class TutorialTipsUI : MonoBehaviour
             Description =
                 "Huge trojanspawn that spawns Tiny enemies while alive, then splits into 2-3 Trojanspawns on death.\n\n" +
                 "Has a chance to split into a shotgun process with 2 Trojanspawns on death."
+        },
+        new EnemyInfo
+        {
+            Category = "MEGA",
+            Name = "Mega Transfer",
+            Description =
+                "Mega chase Transfer. Tanks hits until half health, then summons Damage Containers and redirects all further damage into them with no overload.\n\n" +
+                "Kill the containers carefully - they store unlimited damage and explode like Zip Bombs if you get close."
+        },
+        new EnemyInfo
+        {
+            Category = "MEGA",
+            Name = "Damage Container",
+            Description =
+                "Unlimited-storage Zip Bomb sponge spawned by Mega Transfer.\n\n" +
+                "Absorbs redirected and direct hits without a storage cap, grows as it fills, flees the player, and can proximity-fuse into a larger blast."
         }
     };
 

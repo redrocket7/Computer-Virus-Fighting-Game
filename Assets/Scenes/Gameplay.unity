@@ -518,7 +518,7 @@ MonoBehaviour:
   - {fileID: 1771518582702127463, guid: 5b353fdee447c0346a03b2fd238a61d2, type: 3}
   - {fileID: 1771518582702127463, guid: 3177d296fb31c054ba352b9bd6b220f7, type: 3}
   - {fileID: 1771518582702127463, guid: 9d8923f811322114db031e454a650c8e, type: 3}
-  - {fileID: 1771518582702127463, guid: fe962da04332ef94ab34936a9fed5620, type: 3}
+  - {fileID: 1771518582702127463, guid: d9e0f1a2435566778899aabbcc011223, type: 3}
   - {fileID: 1771518582702127463, guid: 0819d25270c12ef439811e19b2e287cb, type: 3}
   - {fileID: 1771518582702127463, guid: 1f4826c0095fbf54bbdd76b5e9dc20fe, type: 3}
   - {fileID: 1771518582702127463, guid: f00d9c5aa34f0c24d927100cd710c61a, type: 3}
@@ -540,8 +540,9 @@ MonoBehaviour:
   shieldSpawnChance: 0.1
   shieldHealth: 5
   megaEnemyPrefabs:
+  - {fileID: 1771518582702127463, guid: 80dbbbbbde5889645881708365925deb, type: 3}
+  - {fileID: 1771518582702127463, guid: 1b3e41376bb9ccd40a3b1c14470bb941, type: 3}
   - {fileID: 1771518582702127463, guid: 5ed879bcaf07bcd49b9c237c1a57d957, type: 3}
-  - {fileID: 1771518582702127463, guid: 31a9c2507c598854cbf76de1b6dace4f, type: 3}
   megaEnemySpawnChance: 1
   excludeStartRoomForMega: 1
   megaMinimumDepth: 4

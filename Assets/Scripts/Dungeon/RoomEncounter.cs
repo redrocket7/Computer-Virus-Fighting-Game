@@ -15,7 +15,9 @@ public enum RoomModifierType
     /// <summary>One random enemy respawns once after death, weaker but faster.</summary>
     CorruptedSave = 4,
     /// <summary>Spawns tiny enemies over time until all non-tiny enemies are dead.</summary>
-    ForkBomb = 5
+    ForkBomb = 5,
+    /// <summary>Guarantees one mega enemy in the room (at most one Critical Process room per run).</summary>
+    CriticalProcess = 6
 }
 
 /// <summary>
@@ -143,6 +145,7 @@ public class RoomEncounter : MonoBehaviour
             RoomModifierType.PacketLoss => "Packet Loss",
             RoomModifierType.CorruptedSave => "Corrupted Save",
             RoomModifierType.ForkBomb => "Fork Bomb",
+            RoomModifierType.CriticalProcess => "Critical Process",
             _ => type.ToString()
         };
     }
@@ -234,6 +237,9 @@ public class RoomEncounter : MonoBehaviour
 
         if (modifier != RoomModifierType.ForkBomb)
             StopForkBomb(clearSettings: true);
+
+        if (modifier != RoomModifierType.CriticalProcess)
+            bonusMegaPrefab = null;
     }
 
     public void SetBootLoopExtraWaves(int extraWaves)
@@ -1251,6 +1257,17 @@ public class RoomEncounter : MonoBehaviour
         EnemyAI ai = prefab.GetComponent<EnemyAI>() ?? prefab.GetComponentInChildren<EnemyAI>();
         prefabAiCache[prefab] = ai;
         return ai;
+    }
+
+    public bool TryChooseCombatSpawnPosition(
+        GameObject prefab,
+        IReadOnlyList<Vector3> occupiedPositions,
+        out Vector3 spawnPosition)
+    {
+        Transform player = PlayerController.Instance != null
+            ? PlayerController.Instance.transform
+            : null;
+        return TryChooseRandomSpawnPosition(prefab, occupiedPositions, player, out spawnPosition);
     }
 
     bool TryChooseRandomSpawnPosition(
