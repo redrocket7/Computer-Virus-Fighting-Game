@@ -65,7 +65,7 @@ public class TutorialTipsUI : MonoBehaviour
                 "Pickups drop after clears:\n" +
                 "- Weapons expand your loadout\n" +
                 "- USB Dash phases through firewalls\n" +
-                "- Goat Dash rams and grants brief i-frames\n\n" +
+                "- Goat Dash rams, launches enemies, and grants brief i-frames\n\n" +
                 "Open the map (Tab) to teleport between revealed pads."
         },
         new TutorialPage
@@ -293,6 +293,15 @@ public class TutorialTipsUI : MonoBehaviour
             Description =
                 "Chase enemy that releases 2-4 Tiny enemies on death (3 is most common).\n\n" +
                 "Difficulty: 2"
+        },
+        new EnemyInfo
+        {
+            Category = "CHASE",
+            Name = "Cache",
+            Description =
+                "Spawns near you, flees, and vanishes after a few seconds if not killed.\n\n" +
+                "Kill it in time for a random upgrade or gun you do not already own.\n\n" +
+                "Difficulty: 1"
         },
         new EnemyInfo
         {

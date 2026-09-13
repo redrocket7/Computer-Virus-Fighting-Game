@@ -2669,6 +2669,11 @@ MonoBehaviour:
   healthPickupMinCenterDistance: 14
   healthPickupSampleRadius: 3
   healthPickupSpawnAttempts: 48
+  tinyPackMinSize: 3
+  tinyPackMaxSize: 4
+  tinyPackClusterRadius: 2.25
+  spawnTelegraphMinDelay: 1
+  spawnTelegraphMaxDelay: 6
 --- !u!1001 &41692144629054759
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2864,6 +2869,10 @@ PrefabInstance:
     m_TransformParent: {fileID: 7198902801634050418}
     m_Modifications:
     - target: {fileID: 835068383934539318, guid: 67969dc9fc6930f4fb51aaf7c6ce6beb, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 19
+      objectReference: {fileID: 0}
+    - target: {fileID: 835068383934539318, guid: 67969dc9fc6930f4fb51aaf7c6ce6beb, type: 3}
       propertyPath: m_LocalScale.z
       value: 9
       objectReference: {fileID: 0}
@@ -2916,12 +2925,24 @@ PrefabInstance:
       value: CubeObject
       objectReference: {fileID: 0}
     - target: {fileID: 4396026547035337547, guid: 67969dc9fc6930f4fb51aaf7c6ce6beb, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 4396026547035337547, guid: 67969dc9fc6930f4fb51aaf7c6ce6beb, type: 3}
       propertyPath: m_LocalScale.z
       value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 4437441396890859382, guid: 67969dc9fc6930f4fb51aaf7c6ce6beb, type: 3}
+      propertyPath: scaleX
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 4437441396890859382, guid: 67969dc9fc6930f4fb51aaf7c6ce6beb, type: 3}
       propertyPath: scaleZ
       value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 7864899074570393378, guid: 67969dc9fc6930f4fb51aaf7c6ce6beb, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 7864899074570393378, guid: 67969dc9fc6930f4fb51aaf7c6ce6beb, type: 3}
       propertyPath: m_LocalScale.z

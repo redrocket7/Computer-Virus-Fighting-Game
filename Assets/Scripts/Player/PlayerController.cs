@@ -44,6 +44,8 @@ public class PlayerController : MonoBehaviour, IDamageable
     [SerializeField] float goatDashDamage = 2f;
     [SerializeField] float goatDashRamRadius = 1.1f;
     [SerializeField] float goatDashRamHeight = 1.6f;
+    [SerializeField] float goatDashKnockbackSpeed = 16f;
+    [SerializeField] float goatDashKnockbackDuration = 0.3f;
     [Tooltip("Extra invulnerability seconds after the Goat Dash ends.")]
     [SerializeField] float goatDashInvulnLinger = 0.12f;
 
@@ -584,6 +586,19 @@ public class PlayerController : MonoBehaviour, IDamageable
                 continue;
 
             enemy.TakeDamage(goatDashDamage);
+
+            Vector3 launchDirection = dashDirection;
+            launchDirection.y = 0f;
+            if (launchDirection.sqrMagnitude < 0.001f)
+            {
+                launchDirection = enemy.transform.position - rb.position;
+                launchDirection.y = 0f;
+            }
+
+            enemy.ApplyKnockback(
+                launchDirection,
+                goatDashKnockbackSpeed,
+                goatDashKnockbackDuration);
         }
     }
 

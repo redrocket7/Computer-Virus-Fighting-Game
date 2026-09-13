@@ -37,6 +37,10 @@ public class RoomEncounter : MonoBehaviour
     [SerializeField] float minimumSpawnSeparation = 4f;
     [Tooltip("Enemies will not spawn this close to the player.")]
     [SerializeField] float minimumPlayerDistance = 12f;
+    [Tooltip("Near-player enemies (Cache) spawn at least this far from the player.")]
+    [SerializeField] float nearPlayerMinDistance = 2.5f;
+    [Tooltip("Near-player enemies (Cache) spawn at most this far from the player.")]
+    [SerializeField] float nearPlayerMaxDistance = 5.5f;
     [SerializeField] int spawnAttemptsPerEnemy = 48;
     [Tooltip("Reject samples this far above the room floor so nothing spawns on top of props.")]
     [SerializeField] float maximumSpawnHeight = 1.5f;
@@ -902,7 +906,13 @@ public class RoomEncounter : MonoBehaviour
         if (prefab == null)
             return;
 
-        if (!TryChooseRandomSpawnPosition(prefab, occupiedPositions, player, out Vector3 spawnPosition))
+        EnemyAI prefabAi = GetPrefabAi(prefab);
+        Vector3 spawnPosition;
+        bool placed = prefabAi != null && prefabAi.PrefersNearPlayerSpawn
+            ? TryChooseNearPlayerSpawnPosition(prefab, occupiedPositions, player, out spawnPosition)
+            : TryChooseRandomSpawnPosition(prefab, occupiedPositions, player, out spawnPosition);
+
+        if (!placed)
         {
             Debug.LogWarning(
                 $"Could not find a valid NavMesh spawn point for {prefab.name} in {room.name}.",
@@ -911,7 +921,7 @@ public class RoomEncounter : MonoBehaviour
         }
 
         occupiedPositions.Add(spawnPosition);
-        CountBuffSpawn(GetPrefabAi(prefab), ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
+        CountBuffSpawn(prefabAi, ref spawnedOverclock, ref spawnedRepair, ref spawnedShielder);
         planned.Add(new PlannedSpawn
         {
             Prefab = prefab,
@@ -1267,7 +1277,99 @@ public class RoomEncounter : MonoBehaviour
         Transform player = PlayerController.Instance != null
             ? PlayerController.Instance.transform
             : null;
+
+        EnemyAI prefabAi = GetPrefabAi(prefab);
+        if (prefabAi != null && prefabAi.PrefersNearPlayerSpawn)
+            return TryChooseNearPlayerSpawnPosition(prefab, occupiedPositions, player, out spawnPosition);
+
         return TryChooseRandomSpawnPosition(prefab, occupiedPositions, player, out spawnPosition);
+    }
+
+    bool TryChooseNearPlayerSpawnPosition(
+        GameObject prefab,
+        IReadOnlyList<Vector3> occupiedPositions,
+        Transform player,
+        out Vector3 spawnPosition)
+    {
+        spawnPosition = default;
+        if (player == null)
+            return TryChooseRandomSpawnPosition(prefab, occupiedPositions, player, out spawnPosition);
+
+        NavMeshAgent prefabAgent =
+            prefab.GetComponent<NavMeshAgent>() ??
+            prefab.GetComponentInChildren<NavMeshAgent>();
+
+        var filter = new NavMeshQueryFilter
+        {
+            agentTypeID = prefabAgent != null ? prefabAgent.agentTypeID : 0,
+            areaMask = prefabAgent != null ? prefabAgent.areaMask : NavMesh.AllAreas
+        };
+
+        Rect allowedFootprint = room.GetWorldFootprint(-edgePadding);
+        float separationSqr = minimumSpawnSeparation * minimumSpawnSeparation;
+        float minDist = Mathf.Max(0.5f, nearPlayerMinDistance);
+        float maxDist = Mathf.Max(minDist + 0.25f, nearPlayerMaxDistance);
+        float minDistSqr = minDist * minDist;
+        float maxDistSqr = maxDist * maxDist;
+        Vector3 playerPos = player.position;
+
+        Vector3 best = default;
+        float bestScore = float.MaxValue;
+        bool found = false;
+
+        int attempts = Mathf.Max(1, spawnAttemptsPerEnemy);
+        for (int attempt = 0; attempt < attempts; attempt++)
+        {
+            float angle = Random.Range(0f, 360f);
+            float radius = Random.Range(minDist, maxDist);
+            Vector3 desired = playerPos + Quaternion.Euler(0f, angle, 0f) * Vector3.forward * radius;
+            desired.y = playerPos.y + 1f;
+
+            if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, spawnSampleRadius, filter))
+                continue;
+
+            if (hit.position.y - room.transform.position.y > maximumSpawnHeight)
+                continue;
+
+            Vector2 hitXZ = new Vector2(hit.position.x, hit.position.z);
+            if (!allowedFootprint.Contains(hitXZ))
+                continue;
+
+            Vector3 playerOffset = hit.position - playerPos;
+            playerOffset.y = 0f;
+            float distSqr = playerOffset.sqrMagnitude;
+            if (distSqr < minDistSqr || distSqr > maxDistSqr)
+                continue;
+
+            bool tooClose = false;
+            for (int i = 0; i < occupiedPositions.Count; i++)
+            {
+                Vector3 offset = hit.position - occupiedPositions[i];
+                offset.y = 0f;
+                if (offset.sqrMagnitude < separationSqr)
+                {
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (tooClose)
+                continue;
+
+            // Prefer the closest valid sample so Cache starts in the player's face.
+            if (!found || distSqr < bestScore)
+            {
+                found = true;
+                bestScore = distSqr;
+                best = hit.position;
+            }
+        }
+
+        if (!found)
+            return TryChooseRandomSpawnPosition(prefab, occupiedPositions, player, out spawnPosition);
+
+        spawnPosition = best;
+        return true;
     }
 
     bool TryChooseRandomSpawnPosition(

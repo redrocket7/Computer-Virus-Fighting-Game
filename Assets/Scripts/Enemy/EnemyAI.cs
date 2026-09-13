@@ -53,7 +53,11 @@ public class EnemyAI : MonoBehaviour, IDamageable
     int fireRateBuffStacks;
     EnemyShield equippedShield;
 
+    Vector3 knockbackVelocity;
+    float knockbackTimer;
+
     public bool IsChasing { get; protected set; }
+    public bool IsKnockedBack => knockbackTimer > 0f;
     public float DamageMultiplier => damageMultiplier;
     public float CurrentHealth => currentHealth;
     public float MaxHealth => maxHealth;
@@ -98,6 +102,11 @@ public class EnemyAI : MonoBehaviour, IDamageable
     /// When false, Transfer enemies will not redirect incoming damage onto this unit.
     /// </summary>
     public virtual bool CanBeTransferDamageTarget => true;
+
+    /// <summary>
+    /// When true, RoomEncounter places this enemy near the player instead of far away.
+    /// </summary>
+    public virtual bool PrefersNearPlayerSpawn => false;
 
     protected virtual void Update()
     {
@@ -192,6 +201,12 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
     protected void UpdateChase()
     {
+        if (knockbackTimer > 0f)
+        {
+            IsChasing = false;
+            return;
+        }
+
         if (player == null)
         {
             playerFindRetryTimer -= Time.deltaTime;
@@ -249,6 +264,75 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
         if (IsChasing)
             FaceDirection(Agent.desiredVelocity);
+    }
+
+    /// <summary>
+    /// Launches this enemy along a flat direction (e.g. Goat Dash ram).
+    /// </summary>
+    public void ApplyKnockback(Vector3 direction, float speed, float duration)
+    {
+        if (!IsAlive || speed <= 0f || duration <= 0f)
+            return;
+
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.001f)
+            direction = -transform.forward;
+        direction.Normalize();
+
+        knockbackVelocity = direction * speed;
+        knockbackTimer = duration;
+        IsChasing = false;
+        StopAgentPath();
+
+        if (Agent != null && Agent.isOnNavMesh)
+            Agent.velocity = Vector3.zero;
+    }
+
+    protected virtual void LateUpdate()
+    {
+        TickKnockback();
+    }
+
+    void TickKnockback()
+    {
+        if (knockbackTimer <= 0f)
+            return;
+
+        float dt = Time.deltaTime;
+        float previous = knockbackTimer;
+        knockbackTimer -= dt;
+
+        if (knockbackVelocity.sqrMagnitude > 0.0001f)
+        {
+            Vector3 step = knockbackVelocity * dt;
+            if (Agent != null && Agent.isOnNavMesh)
+                Agent.Move(step);
+            else
+                transform.position += step;
+        }
+
+        if (knockbackTimer > 0f && previous > 0.0001f)
+        {
+            // Ease out so the launch reads as a shove, not a constant slide.
+            float retain = Mathf.Clamp01(knockbackTimer / previous);
+            knockbackVelocity *= retain;
+            return;
+        }
+
+        knockbackTimer = 0f;
+        knockbackVelocity = Vector3.zero;
+
+        if (Agent == null)
+            return;
+
+        if (!Agent.isOnNavMesh)
+        {
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 2.5f, Agent.areaMask))
+                Agent.Warp(hit.position);
+            return;
+        }
+
+        Agent.isStopped = false;
     }
 
     public virtual void TakeDamage(float amount)
