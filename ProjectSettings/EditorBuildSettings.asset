@@ -8,5 +8,11 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Gameplay.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/Multiplayer/Scenes/MultiplayerLobby.unity
+    guid: 856a1b5a50eb13e489bc84c41c2787e6
+  - enabled: 1
+    path: Assets/Multiplayer/Scenes/MultiplayerArena.unity
+    guid: 6f65d1cc0e93c154a885429bec6ba0e0
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
