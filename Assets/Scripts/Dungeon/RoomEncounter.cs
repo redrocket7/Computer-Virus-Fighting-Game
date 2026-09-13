@@ -62,6 +62,11 @@ public class RoomEncounter : MonoBehaviour
     [SerializeField] float shieldSpawnChance = 0.2f;
     [SerializeField] float shieldHealth = 4f;
 
+    [Header("Cache Enemy")]
+    [Range(0f, 1f)]
+    [Tooltip("How often Cache is eligible when rolling room enemies. 0 = never, 1 = full pool weight.")]
+    [SerializeField] float cacheEnemySpawnChance = 0.35f;
+
     [Header("Depth Threat Mix")]
     [SerializeField] bool scaleEnemyMixByDepth = true;
     [SerializeField] int encounterDepth;
@@ -114,7 +119,14 @@ public class RoomEncounter : MonoBehaviour
     [Header("Spawn Telegraph")]
     [SerializeField] float spawnTelegraphMinDelay = 1f;
     [SerializeField] float spawnTelegraphMaxDelay = 6f;
+
+    [Header("Critical Process")]
+    [Tooltip("Seconds to show the mega silhouette/name before doors lock.")]
+    [SerializeField] float criticalProcessTelegraphDuration = 2.4f;
+
     bool initialWavePending;
+    Coroutine criticalProcessTelegraphRoutine;
+    CriticalProcessSilhouette activeCriticalSilhouette;
 
     RoomDefinition room;
     readonly HashSet<EnemyAI> livingEnemies = new HashSet<EnemyAI>();
@@ -139,6 +151,15 @@ public class RoomEncounter : MonoBehaviour
 
     /// <summary>Fired when a combat room with a non-None modifier begins.</summary>
     public static event System.Action<RoomModifierType> ModifierEncounterStarted;
+
+    /// <summary>Fired when Critical Process shows its mega preview (doors still unlocked).</summary>
+    public static event System.Action<string> CriticalProcessTelegraphStarted;
+
+    /// <summary>Fired when the Critical Process preview ends or is cancelled.</summary>
+    public static event System.Action CriticalProcessTelegraphEnded;
+
+    /// <summary>Display name of the pending Critical Process mega, if any.</summary>
+    public string BonusMegaDisplayName => FormatEnemyDisplayName(bonusMegaPrefab);
 
     public static string GetModifierDisplayName(RoomModifierType type)
     {
@@ -186,6 +207,11 @@ public class RoomEncounter : MonoBehaviour
     {
         shieldSpawnChance = Mathf.Clamp01(chance);
         shieldHealth = Mathf.Max(0.1f, health);
+    }
+
+    public void SetCacheEnemySpawnChance(float chance)
+    {
+        cacheEnemySpawnChance = Mathf.Clamp01(chance);
     }
 
     public void SetEncounterDepth(int depth)
@@ -360,6 +386,7 @@ public class RoomEncounter : MonoBehaviour
 
     void OnDestroy()
     {
+        CancelCriticalProcessTelegraph(invokeEndedEvent: false);
         ClearSpawnMarkers();
         EndPacketLossEffect();
     }
@@ -372,13 +399,33 @@ public class RoomEncounter : MonoBehaviour
         if (other.GetComponentInParent<PlayerController>() == null)
             return;
 
+        if (ShouldTelegraphCriticalProcess())
+        {
+            if (criticalProcessTelegraphRoutine == null)
+                criticalProcessTelegraphRoutine = StartCoroutine(CriticalProcessTelegraphRoutine());
+            return;
+        }
+
         BeginEncounter();
+    }
+
+    void OnTriggerExit(Collider other)
+    {
+        if (started || criticalProcessTelegraphRoutine == null)
+            return;
+
+        if (other.GetComponentInParent<PlayerController>() == null)
+            return;
+
+        CancelCriticalProcessTelegraph(invokeEndedEvent: true);
     }
 
     public void BeginEncounter()
     {
         if (started)
             return;
+
+        CancelCriticalProcessTelegraph(invokeEndedEvent: false);
 
         started = true;
         if (room == null)
@@ -391,6 +438,84 @@ public class RoomEncounter : MonoBehaviour
             ModifierEncounterStarted?.Invoke(roomModifier);
         Started?.Invoke();
         StartCoroutine(SpawnInitialWaveRoutine());
+    }
+
+    bool ShouldTelegraphCriticalProcess()
+    {
+        return roomModifier == RoomModifierType.CriticalProcess && bonusMegaPrefab != null;
+    }
+
+    IEnumerator CriticalProcessTelegraphRoutine()
+    {
+        if (room == null)
+            room = GetComponent<RoomDefinition>();
+
+        string megaName = FormatEnemyDisplayName(bonusMegaPrefab);
+        CriticalProcessTelegraphStarted?.Invoke(megaName);
+
+        Vector3 silhouettePosition = GetCriticalProcessSilhouettePosition();
+        activeCriticalSilhouette = CriticalProcessSilhouette.Create(bonusMegaPrefab, silhouettePosition);
+
+        float remaining = Mathf.Max(0.35f, criticalProcessTelegraphDuration);
+        while (remaining > 0f)
+        {
+            remaining -= Time.deltaTime;
+            yield return null;
+        }
+
+        criticalProcessTelegraphRoutine = null;
+        ClearCriticalProcessSilhouette();
+        CriticalProcessTelegraphEnded?.Invoke();
+        BeginEncounter();
+    }
+
+    void CancelCriticalProcessTelegraph(bool invokeEndedEvent)
+    {
+        if (criticalProcessTelegraphRoutine != null)
+        {
+            StopCoroutine(criticalProcessTelegraphRoutine);
+            criticalProcessTelegraphRoutine = null;
+        }
+
+        ClearCriticalProcessSilhouette();
+
+        if (invokeEndedEvent)
+            CriticalProcessTelegraphEnded?.Invoke();
+    }
+
+    void ClearCriticalProcessSilhouette()
+    {
+        if (activeCriticalSilhouette == null)
+            return;
+
+        Destroy(activeCriticalSilhouette.gameObject);
+        activeCriticalSilhouette = null;
+    }
+
+    Vector3 GetCriticalProcessSilhouettePosition()
+    {
+        if (room == null)
+            return transform.position;
+
+        Vector3 center = room.transform.TransformPoint(room.FootprintCenter);
+        center.y = room.transform.position.y + 1f;
+        if (NavMesh.SamplePosition(center, out NavMeshHit hit, 8f, NavMesh.AllAreas))
+            return hit.position;
+
+        center.y = room.transform.position.y;
+        return center;
+    }
+
+    public static string FormatEnemyDisplayName(GameObject prefab)
+    {
+        if (prefab == null)
+            return "Unknown";
+
+        string name = prefab.name;
+        if (name.EndsWith(" Enemy", System.StringComparison.Ordinal))
+            name = name.Substring(0, name.Length - " Enemy".Length);
+
+        return name;
     }
 
     IEnumerator SpawnInitialWaveRoutine()
@@ -1174,11 +1299,17 @@ public class RoomEncounter : MonoBehaviour
             if (roomModifier == RoomModifierType.ForkBomb && IsTinyEnemyPrefab(prefab))
                 continue;
 
+            if (!CanIncludeCachePrefab(prefab, weighted))
+                continue;
+
             eligiblePrefabBuffer.Add(prefab);
             if (!weighted)
                 continue;
 
             float weight = GetThreatWeight(prefab, mixExponent);
+            if (GetPrefabAi(prefab) is CacheEnemyAI)
+                weight *= Mathf.Max(0.0001f, cacheEnemySpawnChance);
+
             spawnWeightBuffer.Add(weight);
             totalWeight += weight;
         }
@@ -1200,6 +1331,21 @@ public class RoomEncounter : MonoBehaviour
         }
 
         return eligiblePrefabBuffer[count - 1];
+    }
+
+    bool CanIncludeCachePrefab(GameObject prefab, bool weightedMix)
+    {
+        if (GetPrefabAi(prefab) is not CacheEnemyAI)
+            return true;
+
+        if (cacheEnemySpawnChance <= 0f)
+            return false;
+
+        // Weighted mix uses chance as a weight multiplier instead of a hard gate.
+        if (weightedMix)
+            return true;
+
+        return Random.value <= cacheEnemySpawnChance;
     }
 
     float GetThreatWeight(GameObject prefab, float exponent)

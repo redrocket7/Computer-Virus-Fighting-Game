@@ -39,12 +39,15 @@ public class PlayerHUD : MonoBehaviour
     Text infectionReportLabel;
     GameObject gameOverRoot;
     GameObject modifierBannerRoot;
+    RectTransform modifierBannerRect;
     Text modifierBannerLabel;
+    Text modifierBannerDetailLabel;
     Button restartButton;
     Font font;
     bool isGameOver;
     bool boundToPlayer;
     float modifierBannerHideAt = -1f;
+    string pendingCriticalMegaName = string.Empty;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void RegisterSceneHook()
@@ -96,6 +99,10 @@ public class PlayerHUD : MonoBehaviour
         BindToPlayer();
         RoomEncounter.ModifierEncounterStarted -= OnModifierEncounterStarted;
         RoomEncounter.ModifierEncounterStarted += OnModifierEncounterStarted;
+        RoomEncounter.CriticalProcessTelegraphStarted -= OnCriticalProcessTelegraphStarted;
+        RoomEncounter.CriticalProcessTelegraphStarted += OnCriticalProcessTelegraphStarted;
+        RoomEncounter.CriticalProcessTelegraphEnded -= OnCriticalProcessTelegraphEnded;
+        RoomEncounter.CriticalProcessTelegraphEnded += OnCriticalProcessTelegraphEnded;
     }
 
     void Start()
@@ -107,6 +114,8 @@ public class PlayerHUD : MonoBehaviour
     void OnDisable()
     {
         RoomEncounter.ModifierEncounterStarted -= OnModifierEncounterStarted;
+        RoomEncounter.CriticalProcessTelegraphStarted -= OnCriticalProcessTelegraphStarted;
+        RoomEncounter.CriticalProcessTelegraphEnded -= OnCriticalProcessTelegraphEnded;
         UnbindFromPlayer();
     }
 
@@ -170,14 +179,72 @@ public class PlayerHUD : MonoBehaviour
             RestartRun();
     }
 
+    void OnCriticalProcessTelegraphStarted(string megaName)
+    {
+        pendingCriticalMegaName = string.IsNullOrEmpty(megaName) ? "MEGA" : megaName;
+        ShowModifierBanner(
+            "CRITICAL PROCESS",
+            pendingCriticalMegaName.ToUpperInvariant(),
+            holdUntilHidden: true);
+    }
+
+    void OnCriticalProcessTelegraphEnded()
+    {
+        // Leaving the room cancels the preview. Encounter start re-shows via ModifierEncounterStarted.
+        HideModifierBanner();
+    }
+
     void OnModifierEncounterStarted(RoomModifierType modifier)
     {
         if (modifier == RoomModifierType.None || modifierBannerRoot == null || modifierBannerLabel == null)
             return;
 
-        modifierBannerLabel.text = RoomEncounter.GetModifierDisplayName(modifier).ToUpperInvariant();
+        string title = RoomEncounter.GetModifierDisplayName(modifier).ToUpperInvariant();
+        string detail = string.Empty;
+        if (modifier == RoomModifierType.CriticalProcess && !string.IsNullOrEmpty(pendingCriticalMegaName))
+            detail = pendingCriticalMegaName.ToUpperInvariant();
+
+        ShowModifierBanner(title, detail, holdUntilHidden: false);
+    }
+
+    void ShowModifierBanner(string title, string detail, bool holdUntilHidden)
+    {
+        if (modifierBannerRoot == null || modifierBannerLabel == null)
+            return;
+
+        modifierBannerLabel.text = title ?? string.Empty;
+        bool hasDetail = !string.IsNullOrEmpty(detail);
+        if (modifierBannerDetailLabel != null)
+        {
+            modifierBannerDetailLabel.gameObject.SetActive(hasDetail);
+            modifierBannerDetailLabel.text = hasDetail ? detail : string.Empty;
+        }
+
+        if (modifierBannerLabel != null)
+        {
+            RectTransform labelRect = modifierBannerLabel.rectTransform;
+            if (hasDetail)
+            {
+                labelRect.anchorMin = new Vector2(0f, 0.42f);
+                labelRect.anchorMax = new Vector2(1f, 1f);
+            }
+            else
+            {
+                labelRect.anchorMin = Vector2.zero;
+                labelRect.anchorMax = Vector2.one;
+            }
+
+            labelRect.offsetMin = new Vector2(16f, 0f);
+            labelRect.offsetMax = new Vector2(-16f, 0f);
+        }
+
+        if (modifierBannerRect != null)
+            modifierBannerRect.sizeDelta = new Vector2(460f, hasDetail ? 72f : 48f);
+
         modifierBannerRoot.SetActive(true);
-        modifierBannerHideAt = Time.unscaledTime + Mathf.Max(0.5f, modifierBannerDuration);
+        modifierBannerHideAt = holdUntilHidden
+            ? -1f
+            : Time.unscaledTime + Mathf.Max(0.5f, modifierBannerDuration);
     }
 
     void HideModifierBanner()
@@ -185,6 +252,15 @@ public class PlayerHUD : MonoBehaviour
         modifierBannerHideAt = -1f;
         if (modifierBannerRoot != null)
             modifierBannerRoot.SetActive(false);
+
+        if (modifierBannerDetailLabel != null)
+        {
+            modifierBannerDetailLabel.text = string.Empty;
+            modifierBannerDetailLabel.gameObject.SetActive(false);
+        }
+
+        if (modifierBannerRect != null)
+            modifierBannerRect.sizeDelta = new Vector2(420f, 48f);
     }
 
     void OnHealthChanged(float current, float max)
@@ -216,26 +292,41 @@ public class PlayerHUD : MonoBehaviour
     void BuildModifierBanner()
     {
         Image background = CreateImage("Room Modifier Banner", transform, new Color(0.05f, 0.08f, 0.09f, 0.88f));
-        RectTransform backgroundRect = background.rectTransform;
-        backgroundRect.anchorMin = new Vector2(0.5f, 1f);
-        backgroundRect.anchorMax = new Vector2(0.5f, 1f);
-        backgroundRect.pivot = new Vector2(0.5f, 1f);
-        backgroundRect.anchoredPosition = new Vector2(0f, -22f);
-        backgroundRect.sizeDelta = new Vector2(420f, 48f);
+        modifierBannerRect = background.rectTransform;
+        modifierBannerRect.anchorMin = new Vector2(0.5f, 1f);
+        modifierBannerRect.anchorMax = new Vector2(0.5f, 1f);
+        modifierBannerRect.pivot = new Vector2(0.5f, 1f);
+        modifierBannerRect.anchoredPosition = new Vector2(0f, -22f);
+        modifierBannerRect.sizeDelta = new Vector2(420f, 48f);
 
         modifierBannerLabel = CreateText(
             "Name",
-            backgroundRect,
+            modifierBannerRect,
             string.Empty,
             26,
             new Color(0.55f, 0.95f, 0.78f),
             TextAnchor.MiddleCenter);
         modifierBannerLabel.fontStyle = FontStyle.Bold;
         RectTransform labelRect = modifierBannerLabel.rectTransform;
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
+        labelRect.anchorMin = new Vector2(0f, 0.42f);
+        labelRect.anchorMax = new Vector2(1f, 1f);
         labelRect.offsetMin = new Vector2(16f, 0f);
         labelRect.offsetMax = new Vector2(-16f, 0f);
+
+        modifierBannerDetailLabel = CreateText(
+            "Detail",
+            modifierBannerRect,
+            string.Empty,
+            20,
+            new Color(0.95f, 0.82f, 0.35f),
+            TextAnchor.MiddleCenter);
+        modifierBannerDetailLabel.fontStyle = FontStyle.Bold;
+        RectTransform detailRect = modifierBannerDetailLabel.rectTransform;
+        detailRect.anchorMin = new Vector2(0f, 0f);
+        detailRect.anchorMax = new Vector2(1f, 0.5f);
+        detailRect.offsetMin = new Vector2(16f, 4f);
+        detailRect.offsetMax = new Vector2(-16f, 0f);
+        modifierBannerDetailLabel.gameObject.SetActive(false);
 
         modifierBannerRoot = background.gameObject;
         modifierBannerRoot.SetActive(false);

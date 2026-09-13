@@ -540,6 +540,7 @@ MonoBehaviour:
   maxShielderPerRoom: 1
   shieldSpawnChance: 0.1
   shieldHealth: 5
+  cacheEnemySpawnChance: 0.35
   megaEnemyPrefabs:
   - {fileID: 1771518582702127463, guid: 80dbbbbbde5889645881708365925deb, type: 3}
   - {fileID: 1771518582702127463, guid: 1b3e41376bb9ccd40a3b1c14470bb941, type: 3}
@@ -735,10 +736,12 @@ MonoBehaviour:
   usbTrailSpawnInterval: 0.04
   usbFirewallPhaseLinger: 0.12
   hasGoatDash: 0
-  goatDashDamage: 2
+  goatDashDamage: 3
   goatDashRamRadius: 1.1
   goatDashRamHeight: 1.6
-  goatDashInvulnLinger: 0.12
+  goatDashKnockbackSpeed: 20
+  goatDashKnockbackDuration: 0.5
+  goatDashInvulnLinger: 0.15
   worldCamera: {fileID: 330585545}
   rotationSpeed: 720
   lookStickDeadzone: 0.25

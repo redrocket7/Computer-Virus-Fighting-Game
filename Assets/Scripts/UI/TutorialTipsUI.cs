@@ -160,8 +160,8 @@ public class TutorialTipsUI : MonoBehaviour
         {
             Name = "Critical Process",
             Description =
-                "Guarantees a mega enemy in this room.\n\n" +
-                "At most one Critical Process room appears per run. Treat it as a boss fight and clear supports around it first."
+                "Guarantees a mega enemy in this room. Entering shows a silhouette and the mega's name before the doors lock.\n\n" +
+                "Leave during the preview to cancel. At most one Critical Process room appears per run."
         }
     };
 

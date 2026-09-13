@@ -32,6 +32,11 @@ public class DungeonGenerator : MonoBehaviour
     [SerializeField] float shieldSpawnChance = 0.2f;
     [SerializeField] float shieldHealth = 4f;
 
+    [Header("Cache Enemy")]
+    [Range(0f, 1f)]
+    [Tooltip("How often Cache is eligible when rolling room enemies. 0 = never, 1 = full pool weight.")]
+    [SerializeField] float cacheEnemySpawnChance = 0.35f;
+
     [Header("Mega / Critical Process")]
     [Tooltip("Boss-tier enemies used by the Critical Process room modifier.")]
     [SerializeField] GameObject[] megaEnemyPrefabs;
@@ -885,6 +890,7 @@ public class DungeonGenerator : MonoBehaviour
         encounter?.SetAttackDelay(enemyAttackDelay);
         encounter?.SetBuffEnemyLimits(maxOverclockPerRoom, maxRepairPerRoom, maxShielderPerRoom);
         encounter?.SetShieldSpawnSettings(shieldSpawnChance, shieldHealth);
+        encounter?.SetCacheEnemySpawnChance(cacheEnemySpawnChance);
         encounter?.SetBonusMegaEnemy(null);
         encounter?.SetRoomModifier(RoomModifierType.None);
         encounter?.SetBootLoopExtraWaves(0);
