@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Users;
 
 /// <summary>
 /// Top-down player movement + shooting.
@@ -13,6 +14,11 @@ using UnityEngine.InputSystem;
 public class PlayerController : MonoBehaviour, IDamageable
 {
     public static PlayerController Instance { get; private set; }
+
+    [Header("Local Co-op")]
+    [SerializeField] int playerIndex;
+    [SerializeField] bool forceGamepadOnly;
+
     [Header("Health")]
     [SerializeField] float maxHealth = 5f;
 
@@ -77,6 +83,8 @@ public class PlayerController : MonoBehaviour, IDamageable
     bool isDead;
     int currentWeaponIndex;
     InputAction attackAction;
+    InputAction lookAction;
+    PlayerInput playerInput;
     bool usingStickAim;
     bool controlsLocked;
     float usbTrailSpawnTimer;
@@ -97,6 +105,8 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public Vector2 MoveInput => moveInput;
     public bool IsDashing => isDashing;
+    public int PlayerIndex => playerIndex;
+    public bool ForceGamepadOnly => forceGamepadOnly;
     public bool HasUsbDash => hasUsbDash;
     public bool HasGoatDash => hasGoatDash;
     public bool IsGoatDashInvulnerable =>
@@ -165,12 +175,12 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     void Awake()
     {
-        Instance = this;
         rb = GetComponent<Rigidbody>();
         rb.constraints |= RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         currentHealth = maxHealth;
+        playerInput = GetComponent<PlayerInput>();
 
         if (worldCamera == null)
             worldCamera = Camera.main;
@@ -178,6 +188,66 @@ public class PlayerController : MonoBehaviour, IDamageable
         playerColliders = GetComponentsInChildren<Collider>(true);
         InitializeUnlockedWeapons();
         SelectWeapon(startingWeaponIndex, notify: false);
+
+        PlayerRegistry.Register(this);
+        if (Instance == null || playerIndex == 0)
+            Instance = this;
+    }
+
+    /// <summary>Called by LocalCoopBootstrap to assign index and bind a specific gamepad.</summary>
+    public void ConfigureLocalPlayer(int index, bool forceGamepadOnly)
+    {
+        playerIndex = Mathf.Max(0, index);
+        this.forceGamepadOnly = forceGamepadOnly;
+        name = index == 0 ? "Player 1" : $"Player {index + 1}";
+
+        if (Instance == null || playerIndex == 0)
+            Instance = this;
+
+        PlayerRegistry.Register(this);
+        InvalidateCachedActions();
+        PairInputDevice();
+        CacheAttackAction();
+        CacheLookAction();
+    }
+
+    void InvalidateCachedActions()
+    {
+        attackAction = null;
+        lookAction = null;
+    }
+
+    void PairInputDevice()
+    {
+        if (playerInput == null)
+            playerInput = GetComponent<PlayerInput>();
+        if (playerInput == null)
+            return;
+
+        playerInput.neverAutoSwitchControlSchemes = forceGamepadOnly;
+
+        if (!forceGamepadOnly)
+            return;
+
+        if (playerIndex >= Gamepad.all.Count)
+        {
+            Debug.LogWarning($"Player {playerIndex + 1}: no gamepad at index {playerIndex}.", this);
+            return;
+        }
+
+        Gamepad pad = Gamepad.all[playerIndex];
+        if (playerInput.actions != null)
+            playerInput.actions.Disable();
+
+        // Ensure this PlayerInput owns only its assigned pad.
+        if (playerInput.user.valid)
+            playerInput.user.UnpairDevices();
+
+        InputUser.PerformPairingWithDevice(pad, user: playerInput.user);
+        playerInput.SwitchCurrentControlScheme("Gamepad", pad);
+
+        if (playerInput.actions != null)
+            playerInput.actions.Enable();
     }
 
     void InitializeUnlockedWeapons()
@@ -258,13 +328,15 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     void OnDestroy()
     {
+        PlayerRegistry.Unregister(this);
         if (Instance == this)
-            Instance = null;
+            Instance = PlayerRegistry.GetPrimary();
     }
 
     void OnEnable()
     {
         CacheAttackAction();
+        CacheLookAction();
     }
 
     void Update()
@@ -281,7 +353,8 @@ public class PlayerController : MonoBehaviour, IDamageable
         if (controlsLocked)
             return;
 
-        PollWeaponHotkeys();
+        if (!forceGamepadOnly)
+            PollWeaponHotkeys();
 
         if (IsAttackHeld() && CurrentWeapon != null && CurrentWeapon.fireMode == WeaponFireMode.Automatic)
             TryFire();
@@ -385,6 +458,9 @@ public class PlayerController : MonoBehaviour, IDamageable
             return;
         }
 
+        if (forceGamepadOnly)
+            return;
+
         Mouse mouse = Mouse.current;
         if (mouse != null && mouse.delta.ReadValue().sqrMagnitude > 0.25f)
             usingStickAim = false;
@@ -397,11 +473,20 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     Vector2 ReadLookStick()
     {
-        Gamepad gamepad = Gamepad.current;
-        if (gamepad != null)
-            return gamepad.rightStick.ReadValue();
+        // In local co-op, read the paired pad directly so Look isn't shared/stolen
+        // across PlayerInput action assets after clone + device pairing.
+        if (forceGamepadOnly && playerIndex < Gamepad.all.Count)
+            return Gamepad.all[playerIndex].rightStick.ReadValue();
 
-        return Vector2.zero;
+        CacheLookAction();
+        if (lookAction != null)
+            return lookAction.ReadValue<Vector2>();
+
+        if (playerIndex < Gamepad.all.Count)
+            return Gamepad.all[playerIndex].rightStick.ReadValue();
+
+        Gamepad pad = Gamepad.current;
+        return pad != null ? pad.rightStick.ReadValue() : Vector2.zero;
     }
 
     Vector3 StickToWorldDirection(Vector2 stick)
@@ -717,22 +802,42 @@ public class PlayerController : MonoBehaviour, IDamageable
         if (attackAction != null)
             return attackAction.IsPressed();
 
+        // Fallback matches InputSystem_Actions Gamepad Attack = right shoulder.
+        if (forceGamepadOnly)
+        {
+            if (playerIndex < Gamepad.all.Count)
+                return Gamepad.all[playerIndex].rightShoulder.isPressed;
+            return false;
+        }
+
         Mouse mouse = Mouse.current;
         if (mouse != null && mouse.leftButton.isPressed)
             return true;
 
         Gamepad gamepad = Gamepad.current;
-        return gamepad != null && gamepad.buttonWest.isPressed;
+        return gamepad != null && gamepad.rightShoulder.isPressed;
     }
 
     void CacheAttackAction()
     {
-        if (attackAction != null)
+        if (playerInput == null)
+            playerInput = GetComponent<PlayerInput>();
+        if (playerInput == null || playerInput.actions == null)
             return;
 
-        PlayerInput playerInput = GetComponent<PlayerInput>();
-        if (playerInput != null && playerInput.actions != null)
+        if (attackAction == null)
             attackAction = playerInput.actions.FindAction("Attack");
+    }
+
+    void CacheLookAction()
+    {
+        if (playerInput == null)
+            playerInput = GetComponent<PlayerInput>();
+        if (playerInput == null || playerInput.actions == null)
+            return;
+
+        if (lookAction == null)
+            lookAction = playerInput.actions.FindAction("Look");
     }
 
     void PollWeaponHotkeys()

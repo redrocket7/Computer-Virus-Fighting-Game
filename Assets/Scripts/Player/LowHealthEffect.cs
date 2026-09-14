@@ -5,6 +5,7 @@ using UnityEngine.Rendering.Universal;
 /// <summary>
 /// Low-health screen feedback: vignette, chromatic aberration, and digital glitch.
 /// Uses a runtime Volume profile clone so the shared GameplayProfile asset is not dirtied.
+/// In co-op, tracks the most damaged living player.
 /// </summary>
 public class LowHealthEffect : MonoBehaviour
 {
@@ -70,7 +71,7 @@ public class LowHealthEffect : MonoBehaviour
         if (FindAnyObjectByType<LowHealthEffect>() != null)
             return;
 
-        if (FindAnyObjectByType<PlayerController>() == null)
+        if (PlayerRegistry.Count == 0 && FindAnyObjectByType<PlayerController>() == null)
             return;
 
         var go = new GameObject("Low Health Effect");
@@ -81,12 +82,12 @@ public class LowHealthEffect : MonoBehaviour
 
     void OnEnable()
     {
-        BindToPlayer();
+        BindToMostDamaged();
     }
 
     void Start()
     {
-        BindToPlayer();
+        BindToMostDamaged();
     }
 
     void OnDisable()
@@ -96,11 +97,11 @@ public class LowHealthEffect : MonoBehaviour
         GlitchBurst = 0f;
     }
 
-    void BindToPlayer()
+    void BindToMostDamaged()
     {
-        PlayerController found = player != null
-            ? player
-            : FindAnyObjectByType<PlayerController>();
+        PlayerController found = PlayerRegistry.GetMostDamagedLiving();
+        if (found == null)
+            found = player != null ? player : PlayerRegistry.GetPrimary();
 
         if (found == null)
             return;
@@ -114,6 +115,7 @@ public class LowHealthEffect : MonoBehaviour
         UnbindFromPlayer();
         player = found;
         player.HealthChanged += OnHealthChanged;
+        player.Died += OnTrackedPlayerDied;
         boundToPlayer = true;
         OnHealthChanged(player.CurrentHealth, player.MaxHealth);
     }
@@ -127,14 +129,20 @@ public class LowHealthEffect : MonoBehaviour
         }
 
         player.HealthChanged -= OnHealthChanged;
+        player.Died -= OnTrackedPlayerDied;
         boundToPlayer = false;
+    }
+
+    void OnTrackedPlayerDied()
+    {
+        UnbindFromPlayer();
+        BindToMostDamaged();
+        if (player == null || player.IsDead)
+            OnHealthChanged(0f, 1f);
     }
 
     void Awake()
     {
-        if (player == null)
-            player = FindAnyObjectByType<PlayerController>();
-
         if (volume == null)
             volume = FindAnyObjectByType<Volume>();
 
@@ -149,6 +157,15 @@ public class LowHealthEffect : MonoBehaviour
 
     void Update()
     {
+        // Periodically retarget the most damaged living player in co-op.
+        if (!boundToPlayer ||
+            player == null ||
+            player.IsDead ||
+            (PlayerRegistry.Count > 1 && Time.frameCount % 30 == 0))
+        {
+            BindToMostDamaged();
+        }
+
         float dt = Time.unscaledDeltaTime;
         float targetVignette = maxVignetteIntensity * damageAmount;
         float targetGlitch = maxGlitchIntensity * damageAmount;
@@ -202,7 +219,6 @@ public class LowHealthEffect : MonoBehaviour
 
         nextBurstCheck = 1f / Mathf.Max(0.5f, burstAttemptsPerSecond);
 
-        // Low health = higher chance of a sharp digital spike.
         float chance = Mathf.Lerp(0.04f, 0.55f, damageAmount);
         if (Random.value > chance)
             return;

@@ -1162,6 +1162,25 @@ public class DungeonGenerator : MonoBehaviour
 
     void PlacePlayer(RoomDefinition start)
     {
+        Vector3 spawn = start.GetPlayerSpawnPosition();
+        IReadOnlyList<PlayerController> players = PlayerRegistry.All;
+
+        if (players.Count > 0)
+        {
+            for (int i = 0; i < players.Count; i++)
+            {
+                PlayerController controller = players[i];
+                if (controller == null)
+                    continue;
+
+                Vector3 position = spawn + PlayerRegistry.GetCoopSpawnOffset(controller.PlayerIndex);
+                controller.TeleportTo(position);
+            }
+
+            player = players[0] != null ? players[0].transform : player;
+            return;
+        }
+
         if (player == null)
         {
             var controller = FindAnyObjectByType<PlayerController>();
@@ -1170,7 +1189,16 @@ public class DungeonGenerator : MonoBehaviour
         }
 
         if (player != null)
-            player.position = start.GetPlayerSpawnPosition();
+            player.position = spawn;
+    }
+
+    /// <summary>Re-place all registered players after late co-op join.</summary>
+    public void RepositionRegisteredPlayers()
+    {
+        if (placedRooms.Count == 0 || placedRooms[0] == null)
+            return;
+
+        PlacePlayer(placedRooms[0]);
     }
 
     static void DiscardCandidate(RoomDefinition candidate)

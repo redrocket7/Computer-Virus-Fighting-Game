@@ -207,16 +207,16 @@ public class EnemyAI : MonoBehaviour, IDamageable
             return;
         }
 
+        playerFindRetryTimer -= Time.deltaTime;
+        if (playerFindRetryTimer <= 0f || player == null)
+        {
+            playerFindRetryTimer = 0.5f;
+            FindPlayer();
+        }
+
         if (player == null)
         {
-            playerFindRetryTimer -= Time.deltaTime;
-            if (playerFindRetryTimer <= 0f)
-            {
-                playerFindRetryTimer = 0.5f;
-                FindPlayer();
-            }
-
-            Player = player;
+            Player = null;
             StopAgentPath();
             IsChasing = false;
             return;
@@ -603,22 +603,21 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
     protected void FindPlayer()
     {
-        if (PlayerController.Instance != null)
+        PlayerController nearest = PlayerRegistry.GetNearestLiving(transform.position);
+        if (nearest != null)
         {
-            player = PlayerController.Instance.transform;
+            player = nearest.transform;
             return;
         }
 
-        var controller = FindAnyObjectByType<PlayerController>();
-        if (controller != null)
-        {
-            player = controller.transform;
-            return;
-        }
-
+        player = null;
         GameObject tagged = GameObject.FindGameObjectWithTag("Player");
         if (tagged != null)
-            player = tagged.transform;
+        {
+            PlayerController taggedPlayer = tagged.GetComponentInParent<PlayerController>();
+            if (taggedPlayer == null || !taggedPlayer.IsDead)
+                player = tagged.transform;
+        }
     }
 
     protected void FaceDirection(Vector3 direction)

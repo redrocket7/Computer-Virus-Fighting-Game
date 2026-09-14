@@ -742,8 +742,10 @@ public class RoomEncounter : MonoBehaviour
                 occupiedSpawnBuffer.Add(enemy.transform.position);
         }
 
-        PlayerController player = PlayerController.Instance;
-        Transform playerTransform = player != null ? player.transform : null;
+        PlayerController nearest = PlayerRegistry.GetNearestLiving(room != null
+            ? room.transform.position
+            : transform.position);
+        Transform playerTransform = nearest != null ? nearest.transform : null;
         int unusedOverclock = 0;
         int unusedRepair = 0;
         int unusedShielder = 0;
@@ -866,8 +868,10 @@ public class RoomEncounter : MonoBehaviour
             return plannedSpawnBuffer;
 
         occupiedSpawnBuffer.Clear();
-        PlayerController player = PlayerController.Instance;
-        Transform playerTransform = player != null ? player.transform : null;
+        PlayerController nearest = PlayerRegistry.GetNearestLiving(room != null
+            ? room.transform.position
+            : transform.position);
+        Transform playerTransform = nearest != null ? nearest.transform : null;
         int spawnedOverclock = 0;
         int spawnedRepair = 0;
         int spawnedShielder = 0;
@@ -1420,9 +1424,10 @@ public class RoomEncounter : MonoBehaviour
         IReadOnlyList<Vector3> occupiedPositions,
         out Vector3 spawnPosition)
     {
-        Transform player = PlayerController.Instance != null
-            ? PlayerController.Instance.transform
-            : null;
+        PlayerController nearest = PlayerRegistry.GetNearestLiving(room != null
+            ? room.transform.position
+            : transform.position);
+        Transform player = nearest != null ? nearest.transform : null;
 
         EnemyAI prefabAi = GetPrefabAi(prefab);
         if (prefabAi != null && prefabAi.PrefersNearPlayerSpawn)
@@ -1636,9 +1641,7 @@ public class RoomEncounter : MonoBehaviour
         Vector3 center = room.transform.TransformPoint(room.FootprintCenter);
         float minCenterDistanceSqr = healthPickupMinCenterDistance * healthPickupMinCenterDistance;
 
-        PlayerController player = PlayerController.Instance != null
-            ? PlayerController.Instance
-            : FindAnyObjectByType<PlayerController>();
+        PlayerController player = PlayerRegistry.GetNearestLiving(center);
         Vector3 playerPosition = player != null ? player.transform.position : center;
 
         var candidates = new List<Vector3>();
@@ -1734,10 +1737,7 @@ public class RoomEncounter : MonoBehaviour
 
         pendingUsbDashDrop = false;
 
-        PlayerController player = PlayerController.Instance != null
-            ? PlayerController.Instance
-            : FindAnyObjectByType<PlayerController>();
-        if (player != null && player.HasUsbDash)
+        if (!PlayerRegistry.AnyLivingLacksUsbDash())
             return;
 
         if (!TryChooseHealthPickupPosition(out Vector3 spawnPosition))
@@ -1758,10 +1758,7 @@ public class RoomEncounter : MonoBehaviour
 
         pendingGoatDashDrop = false;
 
-        PlayerController player = PlayerController.Instance != null
-            ? PlayerController.Instance
-            : FindAnyObjectByType<PlayerController>();
-        if (player != null && player.HasGoatDash)
+        if (!PlayerRegistry.AnyLivingLacksGoatDash())
             return;
 
         if (!TryChooseHealthPickupPosition(out Vector3 spawnPosition))
@@ -1780,17 +1777,13 @@ public class RoomEncounter : MonoBehaviour
         if (pendingWeaponPickupDrops.Count == 0)
             return;
 
-        PlayerController player = PlayerController.Instance != null
-            ? PlayerController.Instance
-            : FindAnyObjectByType<PlayerController>();
-
         for (int i = 0; i < pendingWeaponPickupDrops.Count; i++)
         {
             PendingWeaponPickupDrop drop = pendingWeaponPickupDrops[i];
             if (drop.Prefab == null)
                 continue;
 
-            if (player != null && player.HasWeapon(drop.WeaponIndex))
+            if (!PlayerRegistry.AnyLivingLacksWeapon(drop.WeaponIndex))
                 continue;
 
             if (!TryChooseHealthPickupPosition(out Vector3 spawnPosition))

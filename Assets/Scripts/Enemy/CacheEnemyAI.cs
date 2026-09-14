@@ -142,14 +142,13 @@ public class CacheEnemyAI : EnemyAI
     {
         droppedLoot = true;
 
-        PlayerController player = PlayerController.Instance;
         LootBuffer.Clear();
 
-        AddUpgradeOption(usbDashPickupPrefab, player == null || !player.HasUsbDash);
-        AddUpgradeOption(goatDashPickupPrefab, player == null || !player.HasGoatDash);
-        AddWeaponOption(shotgunPickupPrefab, 1, player);
-        AddWeaponOption(machineGunPickupPrefab, 2, player);
-        AddWeaponOption(rocketLauncherPickupPrefab, 3, player);
+        AddUpgradeOption(usbDashPickupPrefab, PlayerRegistry.AnyLivingLacksUsbDash());
+        AddUpgradeOption(goatDashPickupPrefab, PlayerRegistry.AnyLivingLacksGoatDash());
+        AddWeaponOption(shotgunPickupPrefab, 1);
+        AddWeaponOption(machineGunPickupPrefab, 2);
+        AddWeaponOption(rocketLauncherPickupPrefab, 3);
 
         if (LootBuffer.Count == 0)
             return;
@@ -171,12 +170,12 @@ public class CacheEnemyAI : EnemyAI
         LootBuffer.Add(new LootOption { Prefab = prefab, WeaponIndex = -1 });
     }
 
-    void AddWeaponOption(GameObject prefab, int weaponIndex, PlayerController player)
+    void AddWeaponOption(GameObject prefab, int weaponIndex)
     {
         if (prefab == null)
             return;
 
-        if (player != null && player.HasWeapon(weaponIndex))
+        if (!PlayerRegistry.AnyLivingLacksWeapon(weaponIndex))
             return;
 
         LootBuffer.Add(new LootOption { Prefab = prefab, WeaponIndex = weaponIndex });

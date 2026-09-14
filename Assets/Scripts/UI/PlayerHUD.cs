@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -6,16 +7,12 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Screen-space health bar and game over banner.
-/// The whole hierarchy is built at runtime, so the scene needs no UI objects.
+/// Screen-space health / weapon panels and game over banner.
+/// Supports one or two local players (shared-camera co-op).
 /// </summary>
 [RequireComponent(typeof(Canvas))]
 public class PlayerHUD : MonoBehaviour
 {
-    [Header("Target")]
-    [Tooltip("Leave empty to find the player automatically.")]
-    [SerializeField] PlayerController player;
-
     [Header("Health Bar")]
     [SerializeField] Vector2 barSize = new Vector2(320f, 26f);
     [SerializeField] Vector2 barMargin = new Vector2(24f, 24f);
@@ -32,10 +29,23 @@ public class PlayerHUD : MonoBehaviour
     [Header("Room Modifier Banner")]
     [SerializeField] float modifierBannerDuration = 3.25f;
 
-    RectTransform healthFill;
-    Image healthFillImage;
-    Text healthLabel;
-    Text weaponLabel;
+    sealed class PlayerPanel
+    {
+        public PlayerController Player;
+        public RectTransform HealthFill;
+        public Image HealthFillImage;
+        public Text HealthLabel;
+        public Text WeaponLabel;
+        public Text TitleLabel;
+        public GameObject HealthRoot;
+        public GameObject WeaponRoot;
+        public System.Action<float, float> HealthHandler;
+        public System.Action<string> WeaponHandler;
+        public bool Bound;
+    }
+
+    readonly List<PlayerPanel> panels = new List<PlayerPanel>(4);
+    Transform panelsRoot;
     Text infectionReportLabel;
     GameObject gameOverRoot;
     GameObject modifierBannerRoot;
@@ -45,7 +55,6 @@ public class PlayerHUD : MonoBehaviour
     Button restartButton;
     Font font;
     bool isGameOver;
-    bool boundToPlayer;
     float modifierBannerHideAt = -1f;
     string pendingCriticalMegaName = string.Empty;
 
@@ -69,7 +78,7 @@ public class PlayerHUD : MonoBehaviour
 
     public static void EnsureExists()
     {
-        if (FindAnyObjectByType<PlayerController>() == null)
+        if (PlayerRegistry.Count == 0 && FindAnyObjectByType<PlayerController>() == null)
             return;
 
         if (FindAnyObjectByType<PlayerHUD>() == null)
@@ -88,15 +97,16 @@ public class PlayerHUD : MonoBehaviour
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         EnsureEventSystem();
         BuildCanvas();
-        BuildHealthBar();
-        BuildWeaponLabel();
+        panelsRoot = new GameObject("Player Panels", typeof(RectTransform)).transform;
+        panelsRoot.SetParent(transform, false);
+        StretchFull((RectTransform)panelsRoot);
         BuildModifierBanner();
         BuildGameOverBanner();
     }
 
     void OnEnable()
     {
-        BindToPlayer();
+        RebuildForAllPlayers();
         RoomEncounter.ModifierEncounterStarted -= OnModifierEncounterStarted;
         RoomEncounter.ModifierEncounterStarted += OnModifierEncounterStarted;
         RoomEncounter.CriticalProcessTelegraphStarted -= OnCriticalProcessTelegraphStarted;
@@ -107,8 +117,7 @@ public class PlayerHUD : MonoBehaviour
 
     void Start()
     {
-        // Scene reload can race component enable order; rebind once Start runs.
-        BindToPlayer();
+        RebuildForAllPlayers();
     }
 
     void OnDisable()
@@ -116,50 +125,126 @@ public class PlayerHUD : MonoBehaviour
         RoomEncounter.ModifierEncounterStarted -= OnModifierEncounterStarted;
         RoomEncounter.CriticalProcessTelegraphStarted -= OnCriticalProcessTelegraphStarted;
         RoomEncounter.CriticalProcessTelegraphEnded -= OnCriticalProcessTelegraphEnded;
-        UnbindFromPlayer();
+        UnbindAllPanels();
     }
 
-    void BindToPlayer()
+    public void RebuildForAllPlayers()
     {
-        PlayerController found = player != null
-            ? player
-            : FindAnyObjectByType<PlayerController>();
+        UnbindAllPanels();
+        ClearPanelVisuals();
 
-        if (found == null)
-            return;
-
-        if (boundToPlayer && player == found)
+        IReadOnlyList<PlayerController> players = PlayerRegistry.All;
+        if (players.Count == 0)
         {
-            OnHealthChanged(player.CurrentHealth, player.MaxHealth);
-            OnWeaponChanged(player.CurrentWeaponName);
-            SetGameOverVisible(player.IsDead);
-            return;
+            PlayerController fallback = FindAnyObjectByType<PlayerController>();
+            if (fallback != null)
+                CreatePanelForPlayer(fallback, 0);
+        }
+        else
+        {
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (players[i] != null)
+                    CreatePanelForPlayer(players[i], i);
+            }
         }
 
-        UnbindFromPlayer();
-        player = found;
-        player.HealthChanged += OnHealthChanged;
-        player.Died += OnPlayerDied;
-        player.WeaponChanged += OnWeaponChanged;
-        boundToPlayer = true;
-
-        OnHealthChanged(player.CurrentHealth, player.MaxHealth);
-        OnWeaponChanged(player.CurrentWeaponName);
-        SetGameOverVisible(player.IsDead);
+        RefreshGameOverState();
     }
 
-    void UnbindFromPlayer()
+    void CreatePanelForPlayer(PlayerController player, int layoutIndex)
     {
-        if (!boundToPlayer || player == null)
+        bool alignRight = layoutIndex > 0;
+        float x = alignRight ? -barMargin.x : barMargin.x;
+        float pivotX = alignRight ? 1f : 0f;
+        float anchorX = alignRight ? 1f : 0f;
+        // Keep P2 health under the top-right minimap.
+        float healthY = alignRight ? -(barMargin.y + 276f) : -barMargin.y;
+
+        var panel = new PlayerPanel { Player = player };
+
+        RectTransform healthBg = CreateImage($"Health Bar P{player.PlayerIndex + 1}", panelsRoot, new Color(0f, 0f, 0f, 0.6f)).rectTransform;
+        healthBg.anchorMin = new Vector2(anchorX, 1f);
+        healthBg.anchorMax = new Vector2(anchorX, 1f);
+        healthBg.pivot = new Vector2(pivotX, 1f);
+        healthBg.anchoredPosition = new Vector2(x, healthY);
+        healthBg.sizeDelta = barSize;
+        panel.HealthRoot = healthBg.gameObject;
+
+        panel.TitleLabel = CreateText("Title", healthBg, $"P{player.PlayerIndex + 1}", 14, new Color(1f, 1f, 1f, 0.75f),
+            alignRight ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft);
+        RectTransform titleRect = panel.TitleLabel.rectTransform;
+        titleRect.anchorMin = new Vector2(0f, 1f);
+        titleRect.anchorMax = new Vector2(1f, 1f);
+        titleRect.pivot = new Vector2(0.5f, 0f);
+        titleRect.anchoredPosition = new Vector2(0f, 2f);
+        titleRect.sizeDelta = new Vector2(0f, 18f);
+        titleRect.offsetMin = new Vector2(6f, titleRect.offsetMin.y);
+        titleRect.offsetMax = new Vector2(-6f, titleRect.offsetMax.y);
+
+        panel.HealthFillImage = CreateImage("Fill", healthBg, healthyColor);
+        panel.HealthFill = panel.HealthFillImage.rectTransform;
+        panel.HealthFill.anchorMin = Vector2.zero;
+        panel.HealthFill.anchorMax = Vector2.one;
+        panel.HealthFill.offsetMin = new Vector2(3f, 3f);
+        panel.HealthFill.offsetMax = new Vector2(-3f, -3f);
+
+        panel.HealthLabel = CreateText("Amount", healthBg, string.Empty, 18, Color.white, TextAnchor.MiddleCenter);
+        StretchFull(panel.HealthLabel.rectTransform);
+
+        RectTransform weaponBg = CreateImage($"Weapon P{player.PlayerIndex + 1}", panelsRoot, new Color(0f, 0f, 0f, 0.55f)).rectTransform;
+        weaponBg.anchorMin = new Vector2(anchorX, 0f);
+        weaponBg.anchorMax = new Vector2(anchorX, 0f);
+        weaponBg.pivot = new Vector2(pivotX, 0f);
+        weaponBg.anchoredPosition = new Vector2(x, barMargin.y);
+        weaponBg.sizeDelta = new Vector2(280f, 36f);
+        panel.WeaponRoot = weaponBg.gameObject;
+
+        panel.WeaponLabel = CreateText("Name", weaponBg, string.Empty, 20, Color.white,
+            alignRight ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft);
+        RectTransform weaponLabelRect = panel.WeaponLabel.rectTransform;
+        StretchFull(weaponLabelRect);
+        weaponLabelRect.offsetMin = new Vector2(12f, 0f);
+        weaponLabelRect.offsetMax = new Vector2(-8f, 0f);
+
+        panel.HealthHandler = (current, max) => OnPanelHealthChanged(panel, current, max);
+        panel.WeaponHandler = weaponName => OnPanelWeaponChanged(panel, weaponName);
+        player.HealthChanged += panel.HealthHandler;
+        player.Died += OnAnyPlayerDied;
+        player.WeaponChanged += panel.WeaponHandler;
+        panel.Bound = true;
+
+        OnPanelHealthChanged(panel, player.CurrentHealth, player.MaxHealth);
+        OnPanelWeaponChanged(panel, player.CurrentWeaponName);
+        panels.Add(panel);
+    }
+
+    void UnbindAllPanels()
+    {
+        for (int i = 0; i < panels.Count; i++)
         {
-            boundToPlayer = false;
-            return;
+            PlayerPanel panel = panels[i];
+            if (!panel.Bound || panel.Player == null)
+                continue;
+
+            if (panel.HealthHandler != null)
+                panel.Player.HealthChanged -= panel.HealthHandler;
+            if (panel.WeaponHandler != null)
+                panel.Player.WeaponChanged -= panel.WeaponHandler;
+            panel.Player.Died -= OnAnyPlayerDied;
+            panel.Bound = false;
         }
 
-        player.HealthChanged -= OnHealthChanged;
-        player.Died -= OnPlayerDied;
-        player.WeaponChanged -= OnWeaponChanged;
-        boundToPlayer = false;
+        panels.Clear();
+    }
+
+    void ClearPanelVisuals()
+    {
+        if (panelsRoot == null)
+            return;
+
+        for (int i = panelsRoot.childCount - 1; i >= 0; i--)
+            Destroy(panelsRoot.GetChild(i).gameObject);
     }
 
     void Update()
@@ -190,7 +275,6 @@ public class PlayerHUD : MonoBehaviour
 
     void OnCriticalProcessTelegraphEnded()
     {
-        // Leaving the room cancels the preview. Encounter start re-shows via ModifierEncounterStarted.
         HideModifierBanner();
     }
 
@@ -263,14 +347,16 @@ public class PlayerHUD : MonoBehaviour
             modifierBannerRect.sizeDelta = new Vector2(420f, 48f);
     }
 
-    void OnHealthChanged(float current, float max)
+    void OnPanelHealthChanged(PlayerPanel panel, float current, float max)
     {
-        float fraction = max > 0f ? Mathf.Clamp01(current / max) : 0f;
+        if (panel == null || panel.HealthFill == null || panel.HealthFillImage == null || panel.HealthLabel == null)
+            return;
 
-        healthFill.anchorMax = new Vector2(fraction, 1f);
-        healthFillImage.enabled = fraction > 0f;
-        healthFillImage.color = Color.Lerp(criticalColor, healthyColor, fraction);
-        healthLabel.text = $"{FormatHealth(current)} / {FormatHealth(max)}";
+        float fraction = max > 0f ? Mathf.Clamp01(current / max) : 0f;
+        panel.HealthFill.anchorMax = new Vector2(fraction, 1f);
+        panel.HealthFillImage.enabled = fraction > 0f;
+        panel.HealthFillImage.color = Color.Lerp(criticalColor, healthyColor, fraction);
+        panel.HealthLabel.text = $"{FormatHealth(current)} / {FormatHealth(max)}";
     }
 
     static string FormatHealth(float value)
@@ -281,12 +367,12 @@ public class PlayerHUD : MonoBehaviour
         return value.ToString("0.#");
     }
 
-    void OnWeaponChanged(string weaponName)
+    static void OnPanelWeaponChanged(PlayerPanel panel, string weaponName)
     {
-        if (weaponLabel == null)
+        if (panel?.WeaponLabel == null)
             return;
 
-        weaponLabel.text = string.IsNullOrEmpty(weaponName) ? string.Empty : weaponName.ToUpperInvariant();
+        panel.WeaponLabel.text = string.IsNullOrEmpty(weaponName) ? string.Empty : weaponName.ToUpperInvariant();
     }
 
     void BuildModifierBanner()
@@ -332,8 +418,20 @@ public class PlayerHUD : MonoBehaviour
         modifierBannerRoot.SetActive(false);
     }
 
-    void OnPlayerDied()
+    void OnAnyPlayerDied()
     {
+        RefreshGameOverState();
+    }
+
+    void RefreshGameOverState()
+    {
+        if (!PlayerRegistry.AllDead)
+        {
+            if (isGameOver)
+                SetGameOverVisible(false);
+            return;
+        }
+
         HideModifierBanner();
         RefreshInfectionReport();
         SetGameOverVisible(true);
@@ -359,7 +457,6 @@ public class PlayerHUD : MonoBehaviour
         if (!visible || restartButton == null)
             return;
 
-        // Make the button immediately usable with keyboard / gamepad Submit.
         EventSystem eventSystem = EventSystem.current;
         if (eventSystem != null)
             eventSystem.SetSelectedGameObject(restartButton.gameObject);
@@ -382,8 +479,6 @@ public class PlayerHUD : MonoBehaviour
         PacketLossCombatEffect.Reset();
         InfectionReport.BeginRun();
 
-        // EventSystems were previously DontDestroyOnLoad and could linger across restarts.
-        // Tear them down so the next HUD creates a fresh one.
         EventSystem[] eventSystems = FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         for (int i = 0; i < eventSystems.Length; i++)
         {
@@ -404,11 +499,14 @@ public class PlayerHUD : MonoBehaviour
             return true;
         }
 
-        Gamepad gamepad = Gamepad.current;
-        if (gamepad != null &&
-            (gamepad.buttonSouth.wasPressedThisFrame || gamepad.startButton.wasPressedThisFrame))
+        for (int i = 0; i < Gamepad.all.Count; i++)
         {
-            return true;
+            Gamepad gamepad = Gamepad.all[i];
+            if (gamepad != null &&
+                (gamepad.buttonSouth.wasPressedThisFrame || gamepad.startButton.wasPressedThisFrame))
+            {
+                return true;
+            }
         }
 
         return false;
@@ -440,56 +538,12 @@ public class PlayerHUD : MonoBehaviour
             gameObject.AddComponent<GraphicRaycaster>();
     }
 
-    void BuildHealthBar()
-    {
-        RectTransform background = CreateImage("Health Bar", transform, new Color(0f, 0f, 0f, 0.6f)).rectTransform;
-        background.anchorMin = new Vector2(0f, 1f);
-        background.anchorMax = new Vector2(0f, 1f);
-        background.pivot = new Vector2(0f, 1f);
-        background.anchoredPosition = new Vector2(barMargin.x, -barMargin.y);
-        background.sizeDelta = barSize;
-
-        healthFillImage = CreateImage("Fill", background, healthyColor);
-        healthFill = healthFillImage.rectTransform;
-        healthFill.anchorMin = Vector2.zero;
-        healthFill.anchorMax = Vector2.one;
-        healthFill.offsetMin = new Vector2(3f, 3f);
-        healthFill.offsetMax = new Vector2(-3f, -3f);
-
-        healthLabel = CreateText("Amount", background, string.Empty, 18, Color.white, TextAnchor.MiddleCenter);
-        RectTransform labelRect = healthLabel.rectTransform;
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = Vector2.zero;
-        labelRect.offsetMax = Vector2.zero;
-    }
-
-    void BuildWeaponLabel()
-    {
-        RectTransform background = CreateImage("Weapon", transform, new Color(0f, 0f, 0f, 0.55f)).rectTransform;
-        background.anchorMin = new Vector2(0f, 0f);
-        background.anchorMax = new Vector2(0f, 0f);
-        background.pivot = new Vector2(0f, 0f);
-        background.anchoredPosition = new Vector2(barMargin.x, barMargin.y);
-        background.sizeDelta = new Vector2(280f, 36f);
-
-        weaponLabel = CreateText("Name", background, string.Empty, 20, Color.white, TextAnchor.MiddleLeft);
-        RectTransform labelRect = weaponLabel.rectTransform;
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = new Vector2(12f, 0f);
-        labelRect.offsetMax = new Vector2(-8f, 0f);
-    }
-
     void BuildGameOverBanner()
     {
         Image dim = CreateImage("Game Over", transform, new Color(0f, 0f, 0f, 0.72f));
         dim.raycastTarget = true;
         RectTransform dimRect = dim.rectTransform;
-        dimRect.anchorMin = Vector2.zero;
-        dimRect.anchorMax = Vector2.one;
-        dimRect.offsetMin = Vector2.zero;
-        dimRect.offsetMax = Vector2.zero;
+        StretchFull(dimRect);
 
         Text label = CreateText("Message", dimRect, gameOverMessage, 72, gameOverColor, TextAnchor.MiddleCenter);
         label.fontStyle = FontStyle.Bold;
@@ -518,8 +572,7 @@ public class PlayerHUD : MonoBehaviour
         infectionReportLabel.verticalOverflow = VerticalWrapMode.Overflow;
         infectionReportLabel.lineSpacing = 1.05f;
         RectTransform reportRect = infectionReportLabel.rectTransform;
-        reportRect.anchorMin = Vector2.zero;
-        reportRect.anchorMax = Vector2.one;
+        StretchFull(reportRect);
         reportRect.offsetMin = new Vector2(28f, 18f);
         reportRect.offsetMax = new Vector2(-28f, -22f);
 
@@ -565,11 +618,7 @@ public class PlayerHUD : MonoBehaviour
 
         Text text = CreateText("Label", background.transform, label, 28, labelColor, TextAnchor.MiddleCenter);
         text.fontStyle = FontStyle.Bold;
-        RectTransform textRect = text.rectTransform;
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
+        StretchFull(text.rectTransform);
 
         return button;
     }
@@ -598,5 +647,13 @@ public class PlayerHUD : MonoBehaviour
         text.alignment = anchor;
         text.raycastTarget = false;
         return text;
+    }
+
+    static void StretchFull(RectTransform rect)
+    {
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
     }
 }

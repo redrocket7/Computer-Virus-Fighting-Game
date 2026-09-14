@@ -65,7 +65,7 @@ public class DungeonMinimap : MonoBehaviour
     void OnEnable()
     {
         dungeon = FindAnyObjectByType<DungeonGenerator>();
-        player = FindAnyObjectByType<PlayerController>();
+        player = PlayerRegistry.GetPrimary() ?? FindAnyObjectByType<PlayerController>();
         mapOverlay = GetComponent<DungeonMapOverlay>();
 
         if (dungeon != null)
@@ -88,7 +88,13 @@ public class DungeonMinimap : MonoBehaviour
 
     void LateUpdate()
     {
-        if (!hasMap || player == null)
+        if (!hasMap)
+            return;
+
+        if (player == null || player.IsDead)
+            player = PlayerRegistry.GetPrimary() ?? FindAnyObjectByType<PlayerController>();
+
+        if (player == null)
             return;
 
         ApplyViewSize();
@@ -230,7 +236,9 @@ public class DungeonMinimap : MonoBehaviour
 
     void RefreshView()
     {
-        Vector3 playerPosition = player.transform.position;
+        Vector3 focus = PlayerRegistry.Count > 1
+            ? PlayerRegistry.GetLivingCentroid()
+            : player.transform.position;
 
         for (int i = 0; i < tiles.Count; i++)
         {
@@ -239,7 +247,7 @@ public class DungeonMinimap : MonoBehaviour
                 continue;
 
             Rect worldRect = tile.WorldRect;
-            tile.Rect.anchoredPosition = WorldToMap(new Vector3(worldRect.xMin, 0f, worldRect.yMin), playerPosition);
+            tile.Rect.anchoredPosition = WorldToMap(new Vector3(worldRect.xMin, 0f, worldRect.yMin), focus);
             tile.Rect.sizeDelta = new Vector2(worldRect.width * mapScale, worldRect.height * mapScale);
         }
 

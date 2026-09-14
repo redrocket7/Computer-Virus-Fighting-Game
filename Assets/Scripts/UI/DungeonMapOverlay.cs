@@ -78,7 +78,7 @@ public class DungeonMapOverlay : MonoBehaviour
     void OnEnable()
     {
         dungeon = FindAnyObjectByType<DungeonGenerator>();
-        player = FindAnyObjectByType<PlayerController>();
+        player = PlayerRegistry.GetPrimary() ?? FindAnyObjectByType<PlayerController>();
 
         if (dungeon != null)
             dungeon.Generated += Rebuild;
@@ -97,8 +97,19 @@ public class DungeonMapOverlay : MonoBehaviour
 
         UnsubscribeEncounters();
 
-        if (isOpen && player != null)
+        if (isOpen && PlayerRegistry.Count > 0)
+        {
+            IReadOnlyList<PlayerController> players = PlayerRegistry.All;
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (players[i] != null)
+                    players[i].SetControlsLocked(false);
+            }
+        }
+        else if (isOpen && player != null)
+        {
             player.SetControlsLocked(false);
+        }
     }
 
     void Update()
@@ -121,8 +132,14 @@ public class DungeonMapOverlay : MonoBehaviour
         if (keyboard != null && keyboard.tabKey.wasPressedThisFrame)
             return true;
 
-        Gamepad gamepad = Gamepad.current;
-        return gamepad != null && gamepad.selectButton.wasPressedThisFrame;
+        for (int i = 0; i < Gamepad.all.Count; i++)
+        {
+            Gamepad gamepad = Gamepad.all[i];
+            if (gamepad != null && gamepad.selectButton.wasPressedThisFrame)
+                return true;
+        }
+
+        return false;
     }
 
     void LateUpdate()
@@ -143,15 +160,36 @@ public class DungeonMapOverlay : MonoBehaviour
                 overlayRoot.transform.SetAsLastSibling();
         }
 
+        if (player == null || player.IsDead)
+            player = PlayerRegistry.GetPrimary() ?? FindAnyObjectByType<PlayerController>();
+
         if (player != null)
-            player.SetControlsLocked(open);
+        {
+            bool lockControls = open;
+            IReadOnlyList<PlayerController> players = PlayerRegistry.All;
+            if (players.Count > 0)
+            {
+                for (int i = 0; i < players.Count; i++)
+                {
+                    if (players[i] != null && !players[i].IsDead)
+                        players[i].SetControlsLocked(lockControls);
+                }
+            }
+            else
+            {
+                player.SetControlsLocked(lockControls);
+            }
+        }
 
         if (open)
         {
             if (player != null)
             {
-                focusPoint = player.transform.position;
-                controllerCursorWorld = player.transform.position;
+                Vector3 focus = PlayerRegistry.Count > 1
+                    ? PlayerRegistry.GetLivingCentroid()
+                    : player.transform.position;
+                focusPoint = focus;
+                controllerCursorWorld = focus;
             }
 
             if (!hasMap && dungeon != null && dungeon.PlacedRoomCount > 0)
@@ -203,7 +241,7 @@ public class DungeonMapOverlay : MonoBehaviour
 
     void HandleController()
     {
-        Gamepad gamepad = Gamepad.current;
+        Gamepad gamepad = Gamepad.all.Count > 0 ? Gamepad.all[0] : Gamepad.current;
         if (gamepad == null)
         {
             if (controllerCursor != null)

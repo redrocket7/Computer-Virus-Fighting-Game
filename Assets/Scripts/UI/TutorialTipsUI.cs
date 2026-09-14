@@ -428,7 +428,7 @@ public class TutorialTipsUI : MonoBehaviour
         if (FindAnyObjectByType<TutorialTipsUI>() != null)
             return;
 
-        if (FindAnyObjectByType<PlayerController>() == null)
+        if (PlayerRegistry.Count == 0 && FindAnyObjectByType<PlayerController>() == null)
             return;
 
         var go = new GameObject("Tutorial Tips UI", typeof(Canvas));
@@ -479,7 +479,7 @@ public class TutorialTipsUI : MonoBehaviour
 
     void Update()
     {
-        if (player != null && player.IsDead)
+        if (PlayerRegistry.AllDead)
         {
             if (tutorialOpen)
                 CloseTutorial(markComplete: false);
@@ -523,7 +523,7 @@ public class TutorialTipsUI : MonoBehaviour
 
     void BindToPlayer()
     {
-        PlayerController found = FindAnyObjectByType<PlayerController>();
+        PlayerController found = PlayerRegistry.GetPrimary() ?? FindAnyObjectByType<PlayerController>();
         if (found == null)
             return;
 
@@ -533,6 +533,25 @@ public class TutorialTipsUI : MonoBehaviour
         UnbindFromPlayer();
         player = found;
         boundToPlayer = true;
+    }
+
+    static void SetAllPlayersControlsLocked(bool locked)
+    {
+        IReadOnlyList<PlayerController> players = PlayerRegistry.All;
+        if (players.Count > 0)
+        {
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (players[i] != null && !players[i].IsDead)
+                    players[i].SetControlsLocked(locked);
+            }
+
+            return;
+        }
+
+        PlayerController fallback = FindAnyObjectByType<PlayerController>();
+        if (fallback != null && !fallback.IsDead)
+            fallback.SetControlsLocked(locked);
     }
 
     void UnbindFromPlayer()
@@ -550,7 +569,7 @@ public class TutorialTipsUI : MonoBehaviour
         tutorialOpen = true;
         SetHelpOpen(false);
         SetPauseOpen(false);
-        player.SetControlsLocked(true);
+        SetAllPlayersControlsLocked(true);
         if (tutorialRoot != null)
             tutorialRoot.SetActive(true);
         RefreshTutorialPage();
@@ -585,7 +604,7 @@ public class TutorialTipsUI : MonoBehaviour
             PlayerPrefs.SetInt(PrefsTutorialDone, 1);
 
         if (player != null && !player.IsDead && !pauseOpen && !helpOpen)
-            player.SetControlsLocked(false);
+            SetAllPlayersControlsLocked(false);
     }
 
     void RefreshTutorialPage()
@@ -608,20 +627,19 @@ public class TutorialTipsUI : MonoBehaviour
 
         if (open)
         {
-            if (tutorialOpen || (player != null && player.IsDead))
+            if (tutorialOpen || PlayerRegistry.AllDead)
                 return;
 
             SetHelpOpen(false);
             timeScaleBeforePause = Time.timeScale <= 0f ? 1f : Time.timeScale;
             Time.timeScale = 0f;
-            if (player != null)
-                player.SetControlsLocked(true);
+            SetAllPlayersControlsLocked(true);
         }
         else
         {
             Time.timeScale = timeScaleBeforePause > 0f ? timeScaleBeforePause : 1f;
-            if (player != null && !player.IsDead && !tutorialOpen && !helpOpen)
-                player.SetControlsLocked(false);
+            if (!PlayerRegistry.AllDead && !tutorialOpen && !helpOpen)
+                SetAllPlayersControlsLocked(false);
         }
 
         pauseOpen = open;
@@ -735,12 +753,12 @@ public class TutorialTipsUI : MonoBehaviour
 
         if (open)
         {
-            if (player != null && !player.IsDead)
-                player.SetControlsLocked(true);
+            if (!PlayerRegistry.AllDead)
+                SetAllPlayersControlsLocked(true);
         }
-        else if (player != null && !player.IsDead && !tutorialOpen && !pauseOpen)
+        else if (!PlayerRegistry.AllDead && !tutorialOpen && !pauseOpen)
         {
-            player.SetControlsLocked(false);
+            SetAllPlayersControlsLocked(false);
         }
     }
 
