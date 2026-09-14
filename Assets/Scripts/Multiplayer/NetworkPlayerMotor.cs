@@ -3,9 +3,11 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Minimal networked player: owner reads input and moves; others see synced transform.
+/// Legacy minimal motor. Prefer <see cref="PlayerController"/> on networked players.
+/// Kept for older NetworkPlayer prefabs until rebuilt via Tools > Virus Game > Rebuild Network Player Prefab.
 /// </summary>
 [RequireComponent(typeof(NetworkObject))]
+[System.Obsolete("Use PlayerController (network-aware) instead of NetworkPlayerMotor.")]
 public class NetworkPlayerMotor : NetworkBehaviour
 {
     [SerializeField] float moveSpeed = 7f;

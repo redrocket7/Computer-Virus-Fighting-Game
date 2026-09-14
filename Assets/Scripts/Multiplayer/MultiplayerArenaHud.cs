@@ -1,17 +1,20 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Arena HUD: connection status + disconnect, and a simple follow camera for the local player.
+/// Arena HUD: connection status + disconnect. Camera follow uses <see cref="TopDownCameraFollow"/>.
 /// </summary>
+[RequireComponent(typeof(Canvas))]
 public class MultiplayerArenaHud : MonoBehaviour
 {
     Text statusLabel;
     Font font;
-    Transform followTarget;
-    Vector3 cameraOffset = new Vector3(0f, 18f, -10f);
+    TopDownCameraFollow cameraFollow;
+    bool leaveRequested;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void BootstrapAfterSceneLoad()
@@ -29,21 +32,14 @@ public class MultiplayerArenaHud : MonoBehaviour
     void Awake()
     {
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        EnsureEventSystem();
+        EnsureCameraFollow();
         BuildUi();
     }
 
     void Update()
     {
-        if (followTarget == null)
-            TryFindLocalPlayer();
-
-        Camera cam = Camera.main;
-        if (cam != null && followTarget != null)
-        {
-            Vector3 desired = followTarget.position + cameraOffset;
-            cam.transform.position = Vector3.Lerp(cam.transform.position, desired, 1f - Mathf.Exp(-8f * Time.deltaTime));
-            cam.transform.rotation = Quaternion.LookRotation(followTarget.position - cam.transform.position, Vector3.up);
-        }
+        TryBindCameraToLocalPlayer();
 
         if (statusLabel == null)
             return;
@@ -59,19 +55,44 @@ public class MultiplayerArenaHud : MonoBehaviour
         statusLabel.text = $"{role}  ·  players {count}  ·  WASD to move";
     }
 
-    void TryFindLocalPlayer()
+    void TryBindCameraToLocalPlayer()
     {
+        if (cameraFollow == null)
+            EnsureCameraFollow();
+        if (cameraFollow == null || cameraFollow.Target != null)
+            return;
+
+        if (PlayerController.Instance != null)
+        {
+            cameraFollow.SetTarget(PlayerController.Instance.transform);
+            return;
+        }
+
         if (NetworkManager.Singleton == null || NetworkManager.Singleton.LocalClient == null)
             return;
 
         NetworkObject playerObject = NetworkManager.Singleton.LocalClient.PlayerObject;
         if (playerObject != null)
-            followTarget = playerObject.transform;
+            cameraFollow.SetTarget(playerObject.transform);
+    }
+
+    void EnsureCameraFollow()
+    {
+        Camera cam = Camera.main;
+        if (cam == null)
+            return;
+
+        cameraFollow = cam.GetComponent<TopDownCameraFollow>();
+        if (cameraFollow == null)
+            cameraFollow = cam.gameObject.AddComponent<TopDownCameraFollow>();
     }
 
     void BuildUi()
     {
         var canvas = GetComponent<Canvas>();
+        if (canvas == null)
+            canvas = gameObject.AddComponent<Canvas>();
+
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 150;
 
@@ -105,7 +126,7 @@ public class MultiplayerArenaHud : MonoBehaviour
         leaveRect.sizeDelta = new Vector2(160f, 44f);
         var leaveButton = leaveGo.GetComponent<Button>();
         leaveButton.targetGraphic = leaveImage;
-        leaveButton.onClick.AddListener(MultiplayerSession.ShutdownAndReturnToLobby);
+        leaveButton.onClick.AddListener(OnLeaveClicked);
 
         Text leaveLabel = CreateText("Label", leaveRect, "LEAVE", 20, Color.white, TextAnchor.MiddleCenter);
         leaveLabel.fontStyle = FontStyle.Bold;
@@ -114,6 +135,26 @@ public class MultiplayerArenaHud : MonoBehaviour
         leaveLabelRect.anchorMax = Vector2.one;
         leaveLabelRect.offsetMin = Vector2.zero;
         leaveLabelRect.offsetMax = Vector2.zero;
+    }
+
+    void OnLeaveClicked()
+    {
+        if (leaveRequested)
+            return;
+
+        leaveRequested = true;
+        if (statusLabel != null)
+            statusLabel.text = "Leaving...";
+
+        MultiplayerSession.ShutdownAndReturnToLobby();
+    }
+
+    static void EnsureEventSystem()
+    {
+        if (FindAnyObjectByType<EventSystem>() != null)
+            return;
+
+        new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
     }
 
     Text CreateText(string name, Transform parent, string content, int size, Color color, TextAnchor anchor)

@@ -40,6 +40,7 @@ public class MultiplayerLobbyUI : MonoBehaviour
 
     void Awake()
     {
+        MultiplayerSession.EnsureSingleton();
         font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         EnsureEventSystem();
         BuildCanvas();
@@ -103,7 +104,7 @@ public class MultiplayerLobbyUI : MonoBehaviour
         panelRect.anchorMin = new Vector2(0.5f, 0.5f);
         panelRect.anchorMax = new Vector2(0.5f, 0.5f);
         panelRect.pivot = new Vector2(0.5f, 0.5f);
-        panelRect.sizeDelta = new Vector2(520f, 420f);
+        panelRect.sizeDelta = new Vector2(520f, 500f);
 
         Text title = CreateText("Title", panelRect, "MULTIPLAYER LOBBY", 34, new Color(0.55f, 0.95f, 0.78f), TextAnchor.MiddleCenter);
         title.fontStyle = FontStyle.Bold;
@@ -141,24 +142,26 @@ public class MultiplayerLobbyUI : MonoBehaviour
         SetRect(portField.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(36f, -270f), new Vector2(-36f, -230f));
 
         Button hostButton = CreateButton("Host Button", panelRect, "HOST", new Color(0.18f, 0.45f, 0.32f, 1f));
-        SetRect(hostButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.5f, 0f), new Vector2(36f, 110f), new Vector2(-8f, 170f));
+        SetRect(hostButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(0.5f, 0f), new Vector2(36f, 100f), new Vector2(-8f, 155f));
         hostButton.onClick.AddListener(OnHostClicked);
 
         Button joinButton = CreateButton("Join Button", panelRect, "JOIN", new Color(0.2f, 0.35f, 0.55f, 1f));
-        SetRect(joinButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(1f, 0f), new Vector2(8f, 110f), new Vector2(-36f, 170f));
+        SetRect(joinButton.GetComponent<RectTransform>(), new Vector2(0.5f, 0f), new Vector2(1f, 0f), new Vector2(8f, 100f), new Vector2(-36f, 155f));
         joinButton.onClick.AddListener(OnJoinClicked);
 
         Button backButton = CreateButton("Back Button", panelRect, "BACK TO GAME", new Color(0.25f, 0.25f, 0.28f, 1f));
-        SetRect(backButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(36f, 50f), new Vector2(-36f, 100f));
+        SetRect(backButton.GetComponent<RectTransform>(), new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(36f, 45f), new Vector2(-36f, 90f));
         backButton.onClick.AddListener(() => SceneManager.LoadScene("Gameplay"));
 
         statusLabel = CreateText("Status", panelRect, string.Empty, 16, new Color(0.95f, 0.82f, 0.35f), TextAnchor.MiddleCenter);
         statusLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
-        SetRect(statusLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(28f, 8f), new Vector2(-28f, 48f));
+        SetRect(statusLabel.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(28f, 8f), new Vector2(-28f, 40f));
     }
 
     void OnHostClicked()
     {
+        MultiplayerSession.EnsureSingleton();
+
         string readyError = MultiplayerSession.EnsureReadyMessage();
         if (readyError != null)
         {
@@ -184,6 +187,8 @@ public class MultiplayerLobbyUI : MonoBehaviour
 
     void OnJoinClicked()
     {
+        MultiplayerSession.EnsureSingleton();
+
         string readyError = MultiplayerSession.EnsureReadyMessage();
         if (readyError != null)
         {

@@ -24,6 +24,14 @@ public class TopDownCameraFollow : MonoBehaviour
 
     Vector3 velocity = Vector3.zero;
 
+    public Transform Target => target;
+
+    public void SetTarget(Transform newTarget)
+    {
+        target = newTarget;
+        velocity = Vector3.zero;
+    }
+
     void LateUpdate()
     {
         if (target == null)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -7,12 +8,19 @@ using UnityEngine.InputSystem;
 /// Top-down player movement + shooting.
 /// Rotation faces the mouse on the ground, or the right stick when using a gamepad.
 /// Pair with Player Input (Behavior: Send Messages) using InputSystem_Actions.
+/// Offline: full control. Networked: only the owning client drives input/movement.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(PlayerInput))]
-public class PlayerController : MonoBehaviour, IDamageable
+public class PlayerController : NetworkBehaviour, IDamageable
 {
     public static PlayerController Instance { get; private set; }
+
+    /// <summary>
+    /// True when this instance should read input and simulate movement.
+    /// Offline / unspawned objects always have control; networked remotes do not.
+    /// </summary>
+    public bool HasControl => !IsSpawned || IsOwner;
     [Header("Health")]
     [SerializeField] float maxHealth = 5f;
 
@@ -165,11 +173,8 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     void Awake()
     {
-        Instance = this;
         rb = GetComponent<Rigidbody>();
         rb.constraints |= RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-        rb.interpolation = RigidbodyInterpolation.Interpolate;
-        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         currentHealth = maxHealth;
 
         if (worldCamera == null)
@@ -178,6 +183,76 @@ public class PlayerController : MonoBehaviour, IDamageable
         playerColliders = GetComponentsInChildren<Collider>(true);
         InitializeUnlockedWeapons();
         SelectWeapon(startingWeaponIndex, notify: false);
+
+        // Offline / pre-spawn: claim local player immediately.
+        // Networked clones wait for OnNetworkSpawn so only the owner becomes Instance.
+        if (!IsSpawned && (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening))
+        {
+            Instance = this;
+            ApplyControlState();
+        }
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        ApplyControlState();
+
+        if (IsOwner)
+        {
+            Instance = this;
+            name = $"Player (You #{OwnerClientId})";
+            PlaceAtNetworkSpawnSlot((int)OwnerClientId);
+        }
+        else
+        {
+            name = $"Player (#{OwnerClientId})";
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (Instance == this)
+            Instance = null;
+
+        base.OnNetworkDespawn();
+    }
+
+    void ApplyControlState()
+    {
+        bool control = HasControl;
+
+        PlayerInput playerInput = GetComponent<PlayerInput>();
+        if (playerInput != null)
+            playerInput.enabled = control;
+
+        if (rb == null)
+            return;
+
+        if (control)
+        {
+            rb.isKinematic = false;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        }
+        else
+        {
+            rb.isKinematic = true;
+            rb.interpolation = RigidbodyInterpolation.None;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+    }
+
+    void PlaceAtNetworkSpawnSlot(int slot)
+    {
+        float angle = slot * 90f;
+        Vector3 offset = Quaternion.Euler(0f, angle, 0f) * Vector3.forward * 2.5f;
+        Vector3 spawnPos = new Vector3(offset.x, transform.position.y, offset.z);
+        TeleportTo(spawnPos);
+        transform.rotation = Quaternion.LookRotation(-offset.normalized, Vector3.up);
+        if (rb != null)
+            rb.rotation = transform.rotation;
     }
 
     void InitializeUnlockedWeapons()
@@ -244,7 +319,7 @@ public class PlayerController : MonoBehaviour, IDamageable
     /// <summary>Unlocks a weapon by loadout index and equips it. Returns false if already owned.</summary>
     public bool GrantWeapon(int weaponIndex)
     {
-        if (isDead || !IsValidWeaponIndex(weaponIndex))
+        if (!HasControl || isDead || !IsValidWeaponIndex(weaponIndex))
             return false;
 
         if (!unlockedWeapons.Add(weaponIndex))
@@ -269,6 +344,9 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     void Update()
     {
+        if (!HasControl)
+            return;
+
         if (cooldownTimer > 0f)
             cooldownTimer -= Time.deltaTime;
 
@@ -289,6 +367,9 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     void FixedUpdate()
     {
+        if (!HasControl)
+            return;
+
         if (isDead || controlsLocked)
         {
             rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
@@ -301,12 +382,18 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public void OnMove(InputValue value)
     {
+        if (!HasControl)
+        {
+            moveInput = Vector2.zero;
+            return;
+        }
+
         moveInput = (isDead || controlsLocked) ? Vector2.zero : value.Get<Vector2>();
     }
 
     public void OnDash(InputValue value)
     {
-        if (!value.isPressed || isDead || controlsLocked)
+        if (!HasControl || !value.isPressed || isDead || controlsLocked)
             return;
 
         TryDash();
@@ -314,7 +401,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public void OnAttack(InputValue value)
     {
-        if (!value.isPressed || isDead || controlsLocked)
+        if (!HasControl || !value.isPressed || isDead || controlsLocked)
             return;
 
         if (CurrentWeapon == null || CurrentWeapon.fireMode == WeaponFireMode.SemiAutomatic)
@@ -323,7 +410,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public void OnNext(InputValue value)
     {
-        if (!value.isPressed || isDead || controlsLocked)
+        if (!HasControl || !value.isPressed || isDead || controlsLocked)
             return;
 
         CycleWeapon(1);
@@ -331,7 +418,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public void OnPrevious(InputValue value)
     {
-        if (!value.isPressed || isDead || controlsLocked)
+        if (!HasControl || !value.isPressed || isDead || controlsLocked)
             return;
 
         CycleWeapon(-1);
@@ -513,7 +600,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public bool GrantUsbDash()
     {
-        if (hasUsbDash || isDead)
+        if (!HasControl || hasUsbDash || isDead)
             return false;
 
         hasUsbDash = true;
@@ -524,7 +611,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public bool GrantGoatDash()
     {
-        if (hasGoatDash || isDead)
+        if (!HasControl || hasGoatDash || isDead)
             return false;
 
         hasGoatDash = true;
@@ -808,7 +895,8 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public void TakeDamage(float amount)
     {
-        if (amount <= 0f || isDead || IsGoatDashInvulnerable)
+        // Owner-authoritative for now: only the controlling client applies damage locally.
+        if (!HasControl || amount <= 0f || isDead || IsGoatDashInvulnerable)
             return;
 
         currentHealth = Mathf.Max(0f, currentHealth - amount);
@@ -822,7 +910,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public bool TryHeal(float amount)
     {
-        if (amount <= 0f || isDead || currentHealth >= maxHealth)
+        if (!HasControl || amount <= 0f || isDead || currentHealth >= maxHealth)
             return false;
 
         currentHealth = Mathf.Min(maxHealth, currentHealth + amount);

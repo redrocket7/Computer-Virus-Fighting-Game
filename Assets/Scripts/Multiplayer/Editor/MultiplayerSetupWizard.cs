@@ -5,6 +5,7 @@ using Unity.Netcode.Transports.UTP;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 /// <summary>
@@ -29,6 +30,26 @@ public static class MultiplayerSetupWizard
             "1) Open MultiplayerLobby\n" +
             "2) Press Play, click Host\n" +
             "3) Build & Run a second instance (or Multiplayer Play Mode) and Join 127.0.0.1",
+            "OK");
+    }
+
+    [MenuItem("Tools/Virus Game/Rebuild Network Player Prefab")]
+    public static void RebuildNetworkPlayerPrefabFromMenu()
+    {
+        EnsureFolders();
+        GameObject playerPrefab = CreateOrUpdatePlayerPrefab();
+        if (playerPrefab == null)
+        {
+            EditorUtility.DisplayDialog("Network Player", "Failed to rebuild NetworkPlayer prefab.", "OK");
+            return;
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        EditorUtility.DisplayDialog(
+            "Network Player",
+            "Rebuilt NetworkPlayer from Assets/Prefabs/Player.prefab.\n\n" +
+            "If the lobby NetworkManager still points at an old prefab, run Setup Multiplayer Scaffold once.",
             "OK");
     }
 
@@ -82,29 +103,51 @@ public static class MultiplayerSetupWizard
 
     static GameObject CreateOrUpdatePlayerPrefab()
     {
-        var root = new GameObject("NetworkPlayer");
-        root.AddComponent<NetworkObject>();
-        root.AddComponent<ClientNetworkTransform>();
-        var motor = root.AddComponent<NetworkPlayerMotor>();
+        const string SourcePlayerPrefab = "Assets/Prefabs/Player.prefab";
+        GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(SourcePlayerPrefab);
+        if (source == null)
+        {
+            Debug.LogError($"Missing {SourcePlayerPrefab}. Cannot build NetworkPlayer.");
+            return null;
+        }
 
-        GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-        body.name = "Body";
-        body.transform.SetParent(root.transform, false);
-        body.transform.localPosition = new Vector3(0f, 0.5f, 0f);
-        Object.DestroyImmediate(body.GetComponent<CapsuleCollider>());
+        GameObject root = PrefabUtility.InstantiatePrefab(source) as GameObject;
+        if (root == null)
+            root = Object.Instantiate(source);
 
-        var capsule = root.AddComponent<CapsuleCollider>();
-        capsule.height = 2f;
-        capsule.radius = 0.35f;
-        capsule.center = new Vector3(0f, 0.5f, 0f);
+        root.name = "NetworkPlayer";
 
-        var rb = root.AddComponent<Rigidbody>();
-        rb.isKinematic = true;
-        rb.useGravity = false;
+        var motor = root.GetComponent<NetworkPlayerMotor>();
+        if (motor != null)
+            Object.DestroyImmediate(motor);
 
-        SerializedObject motorSo = new SerializedObject(motor);
-        motorSo.FindProperty("bodyRenderer").objectReferenceValue = body.GetComponent<MeshRenderer>();
-        motorSo.ApplyModifiedPropertiesWithoutUndo();
+        NetworkObject networkObject = root.GetComponent<NetworkObject>();
+        if (networkObject == null)
+            networkObject = root.AddComponent<NetworkObject>();
+
+        SerializedObject networkObjectSo = new SerializedObject(networkObject);
+        SerializedProperty inScenePlaced = networkObjectSo.FindProperty("m_InScenePlaced");
+        if (inScenePlaced != null)
+            inScenePlaced.boolValue = false;
+        networkObjectSo.ApplyModifiedPropertiesWithoutUndo();
+
+        if (root.GetComponent<ClientNetworkTransform>() == null)
+            root.AddComponent<ClientNetworkTransform>();
+
+        // Physics-driven owner movement; remotes are made kinematic at runtime.
+        Rigidbody rb = root.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.useGravity = false;
+            rb.constraints |= RigidbodyConstraints.FreezePositionY;
+        }
+
+        if (root.GetComponent<PlayerController>() == null)
+            Debug.LogWarning("NetworkPlayer is missing PlayerController after cloning Player prefab.");
+
+        if (root.GetComponent<PlayerInput>() == null)
+            Debug.LogWarning("NetworkPlayer is missing PlayerInput after cloning Player prefab.");
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
         Object.DestroyImmediate(root);
@@ -130,7 +173,9 @@ public static class MultiplayerSetupWizard
 
         var networkGo = new GameObject("NetworkManager");
         var networkManager = networkGo.AddComponent<NetworkManager>();
-        networkGo.AddComponent<UnityTransport>();
+        var transport = networkGo.AddComponent<UnityTransport>();
+        // NGO does not auto-bind a sibling transport; StartHost fails without this assignment.
+        networkManager.NetworkConfig.NetworkTransport = transport;
         TryAddNetworkPrefab(networkManager, playerPrefab);
 
         var lobbyUi = new GameObject("Multiplayer Lobby UI");
@@ -169,6 +214,7 @@ public static class MultiplayerSetupWizard
         cam.transform.position = new Vector3(0f, 18f, -10f);
         cam.transform.rotation = Quaternion.Euler(55f, 0f, 0f);
         camGo.AddComponent<AudioListener>();
+        camGo.AddComponent<TopDownCameraFollow>();
 
         var lightGo = new GameObject("Directional Light");
         var light = lightGo.AddComponent<Light>();
@@ -194,7 +240,7 @@ public static class MultiplayerSetupWizard
         CreateWall("Wall East", new Vector3(20f, 1f, 0f), new Vector3(1f, 2f, 40f));
         CreateWall("Wall West", new Vector3(-20f, 1f, 0f), new Vector3(1f, 2f, 40f));
 
-        var hud = new GameObject("Arena Systems");
+        var hud = new GameObject("Arena Systems", typeof(Canvas));
         hud.AddComponent<MultiplayerArenaHud>();
 
         EditorSceneManager.SaveScene(scene, ArenaScenePath);
