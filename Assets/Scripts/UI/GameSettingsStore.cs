@@ -19,16 +19,59 @@ public static class GameSettingsStore
 
     public static void ApplySavedSettings()
     {
-        int quality = PlayerPrefs.GetInt(PrefsQuality, QualitySettings.GetQualityLevel());
-        quality = Mathf.Clamp(quality, 0, Mathf.Max(0, QualitySettings.names.Length - 1));
+        int quality = GetSavedQuality();
         if (quality != QualitySettings.GetQualityLevel())
             QualitySettings.SetQualityLevel(quality, true);
 
-        bool fullscreen = PlayerPrefs.GetInt(PrefsFullscreen, Screen.fullScreen ? 1 : 0) != 0;
-        int width = PlayerPrefs.GetInt(PrefsWidth, Screen.width);
-        int height = PlayerPrefs.GetInt(PrefsHeight, Screen.height);
-        int refresh = PlayerPrefs.GetInt(PrefsRefresh, GetCurrentRefreshRate());
+        ApplyScreen(
+            PlayerPrefs.GetInt(PrefsWidth, Screen.width),
+            PlayerPrefs.GetInt(PrefsHeight, Screen.height),
+            PlayerPrefs.GetInt(PrefsRefresh, GetCurrentRefreshRate()),
+            GetSavedFullscreen());
+    }
 
+    public static int GetSavedQuality()
+    {
+        int max = Mathf.Max(0, QualitySettings.names.Length - 1);
+        return Mathf.Clamp(PlayerPrefs.GetInt(PrefsQuality, QualitySettings.GetQualityLevel()), 0, max);
+    }
+
+    public static void SetQuality(int index)
+    {
+        index = Mathf.Clamp(index, 0, Mathf.Max(0, QualitySettings.names.Length - 1));
+        if (index != QualitySettings.GetQualityLevel())
+            QualitySettings.SetQualityLevel(index, true);
+        PlayerPrefs.SetInt(PrefsQuality, index);
+        PlayerPrefs.Save();
+    }
+
+    public static bool GetSavedFullscreen() =>
+        PlayerPrefs.GetInt(PrefsFullscreen, Screen.fullScreen ? 1 : 0) != 0;
+
+    public static void SetFullscreen(bool fullscreen)
+    {
+        PlayerPrefs.SetInt(PrefsFullscreen, fullscreen ? 1 : 0);
+        PlayerPrefs.Save();
+
+        // Re-apply resolution with the new mode — toggling fullScreenMode alone is unreliable.
+        ApplyScreen(
+            PlayerPrefs.GetInt(PrefsWidth, Screen.width),
+            PlayerPrefs.GetInt(PrefsHeight, Screen.height),
+            PlayerPrefs.GetInt(PrefsRefresh, GetCurrentRefreshRate()),
+            fullscreen);
+    }
+
+    public static void SetResolution(int width, int height, int refreshRate)
+    {
+        ApplyScreen(width, height, refreshRate, GetSavedFullscreen());
+        PlayerPrefs.SetInt(PrefsWidth, width);
+        PlayerPrefs.SetInt(PrefsHeight, height);
+        PlayerPrefs.SetInt(PrefsRefresh, refreshRate);
+        PlayerPrefs.Save();
+    }
+
+    static void ApplyScreen(int width, int height, int refresh, bool fullscreen)
+    {
         if (width < 640 || height < 480)
         {
             width = Screen.width;
@@ -42,44 +85,6 @@ public static class GameSettingsStore
             denominator = 1
         };
         Screen.SetResolution(width, height, mode, rate);
-    }
-
-    public static int GetSavedQuality() =>
-        PlayerPrefs.GetInt(PrefsQuality, QualitySettings.GetQualityLevel());
-
-    public static void SetQuality(int index)
-    {
-        index = Mathf.Clamp(index, 0, Mathf.Max(0, QualitySettings.names.Length - 1));
-        QualitySettings.SetQualityLevel(index, true);
-        PlayerPrefs.SetInt(PrefsQuality, index);
-        PlayerPrefs.Save();
-    }
-
-    public static bool GetSavedFullscreen() =>
-        PlayerPrefs.GetInt(PrefsFullscreen, Screen.fullScreen ? 1 : 0) != 0;
-
-    public static void SetFullscreen(bool fullscreen)
-    {
-        FullScreenMode mode = fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
-        Screen.fullScreenMode = mode;
-        PlayerPrefs.SetInt(PrefsFullscreen, fullscreen ? 1 : 0);
-        PlayerPrefs.Save();
-    }
-
-    public static void SetResolution(int width, int height, int refreshRate)
-    {
-        bool fullscreen = GetSavedFullscreen();
-        FullScreenMode mode = fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
-        var rate = new RefreshRate
-        {
-            numerator = (uint)Mathf.Max(1, refreshRate),
-            denominator = 1
-        };
-        Screen.SetResolution(width, height, mode, rate);
-        PlayerPrefs.SetInt(PrefsWidth, width);
-        PlayerPrefs.SetInt(PrefsHeight, height);
-        PlayerPrefs.SetInt(PrefsRefresh, refreshRate);
-        PlayerPrefs.Save();
     }
 
     public static int GetCurrentRefreshRate()

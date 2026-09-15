@@ -1,5 +1,4 @@
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -56,11 +55,31 @@ public class MainMenuUI : MonoBehaviour
     Button settingsDisplayTabButton;
     Button settingsQualityTabButton;
     Text controlsBody;
+    RectTransform controlsScrollContent;
+    bool controlsTextBuilt;
     Text resolutionLabel;
     Text fullscreenLabel;
     Text qualityLabel;
     readonly List<Resolution> uniqueResolutions = new List<Resolution>();
     int resolutionIndex;
+    readonly List<int> cycleableQualityLevels = new List<int>(4);
+    bool qualityLevelsCached;
+    readonly List<Button> settingsSectionButtons = new List<Button>(3);
+
+    const string ControlsCopy =
+        "CONTROLS\n\n" +
+        "Move - WASD / Left Stick\n" +
+        "Aim - Mouse / Right Stick\n" +
+        "Shoot - Left Click / Right Shoulder (RB)\n" +
+        "Dash - Left Shift / Right Trigger (RT)\n" +
+        "Weapon Switch - Scroll Wheel / 1-4 / D-pad\n" +
+        "Map - Tab / Select\n" +
+        "Help - H\n" +
+        "Pause - Esc / Start\n\n" +
+        "LOCAL CO-OP\n" +
+        "With 2 gamepads connected, P1 uses pad 0 and P2 uses pad 1.\n" +
+        "Both players must gather at a doorway to pass between rooms.\n\n" +
+        "Rebinding is not available in this build.";
 
     enum View
     {
@@ -105,17 +124,10 @@ public class MainMenuUI : MonoBehaviour
 
     void Update()
     {
-        if (!WasCancelPressed())
+        if (currentView == View.Main || !WasCancelPressed())
             return;
 
-        switch (currentView)
-        {
-            case View.Modifiers:
-            case View.Enemies:
-            case View.Settings:
-                ShowMain();
-                break;
-        }
+        ShowMain();
     }
 
     void PlayGame()
@@ -136,52 +148,39 @@ public class MainMenuUI : MonoBehaviour
 
     void ShowMain()
     {
-        currentView = View.Main;
-        SetTabActive(mainTab, true);
-        SetTabActive(modifiersTab, false);
-        SetTabActive(enemiesTab, false);
-        SetTabActive(settingsTab, false);
+        SetView(View.Main);
         SelectPrimaryButton(playButton);
     }
 
     void ShowModifiers()
     {
-        currentView = View.Modifiers;
-        SetTabActive(mainTab, false);
-        SetTabActive(modifiersTab, true);
-        SetTabActive(enemiesTab, false);
-        SetTabActive(settingsTab, false);
+        SetView(View.Modifiers);
         SelectModifier(0);
-        if (modifierNameButtons.Count > 0)
-            SelectPrimaryButton(modifierNameButtons[0]);
-        else
-            SelectPrimaryButton(modifiersBackButton);
+        SelectPrimaryButton(modifierNameButtons.Count > 0 ? modifierNameButtons[0] : modifiersBackButton);
     }
 
     void ShowEnemies()
     {
-        currentView = View.Enemies;
-        SetTabActive(mainTab, false);
-        SetTabActive(modifiersTab, false);
-        SetTabActive(enemiesTab, true);
-        SetTabActive(settingsTab, false);
+        SetView(View.Enemies);
         SelectEnemy(0);
-        if (enemyNameButtons.Count > 0)
-            SelectPrimaryButton(enemyNameButtons[0]);
-        else
-            SelectPrimaryButton(enemiesBackButton);
+        SelectPrimaryButton(enemyNameButtons.Count > 0 ? enemyNameButtons[0] : enemiesBackButton);
     }
 
     void ShowSettings()
     {
-        currentView = View.Settings;
-        SetTabActive(mainTab, false);
-        SetTabActive(modifiersTab, false);
-        SetTabActive(enemiesTab, false);
-        SetTabActive(settingsTab, true);
+        SetView(View.Settings);
         ShowSettingsSection(0);
         RefreshSettingsLabels();
         SelectPrimaryButton(settingsControlsTabButton);
+    }
+
+    void SetView(View view)
+    {
+        currentView = view;
+        SetTabActive(mainTab, view == View.Main);
+        SetTabActive(modifiersTab, view == View.Modifiers);
+        SetTabActive(enemiesTab, view == View.Enemies);
+        SetTabActive(settingsTab, view == View.Settings);
     }
 
     void ShowSettingsSection(int section)
@@ -189,9 +188,7 @@ public class MainMenuUI : MonoBehaviour
         SetTabActive(settingsControlsPanel, section == 0);
         SetTabActive(settingsDisplayPanel, section == 1);
         SetTabActive(settingsQualityPanel, section == 2);
-        HighlightCatalogButtons(
-            new List<Button> { settingsControlsTabButton, settingsDisplayTabButton, settingsQualityTabButton },
-            section);
+        HighlightCatalogButtons(settingsSectionButtons, section);
         if (section == 0)
             RefreshControlsText();
     }
@@ -279,13 +276,46 @@ public class MainMenuUI : MonoBehaviour
 
     void CycleQuality(int delta)
     {
-        string[] names = QualitySettings.names;
-        if (names == null || names.Length == 0)
+        EnsureCycleableQualityLevels();
+        int count = cycleableQualityLevels.Count;
+        if (count <= 1)
             return;
 
-        int index = (GameSettingsStore.GetSavedQuality() + delta + names.Length) % names.Length;
-        GameSettingsStore.SetQuality(index);
+        int current = GameSettingsStore.GetSavedQuality();
+        int pos = cycleableQualityLevels.IndexOf(current);
+        if (pos < 0)
+            pos = 0;
+
+        int next = cycleableQualityLevels[(pos + delta + count) % count];
+        GameSettingsStore.SetQuality(next);
         RefreshSettingsLabels();
+    }
+
+    void EnsureCycleableQualityLevels()
+    {
+        if (qualityLevelsCached)
+            return;
+
+        qualityLevelsCached = true;
+        cycleableQualityLevels.Clear();
+        string[] names = QualitySettings.names;
+        if (names == null || names.Length == 0)
+        {
+            cycleableQualityLevels.Add(QualitySettings.GetQualityLevel());
+            return;
+        }
+
+        // Match QualitySettings exclusions without calling SetQualityLevel (avoids hitching).
+        bool mobile = Application.isMobilePlatform;
+        for (int i = 0; i < names.Length; i++)
+        {
+            bool isMobileTier = names[i] == "Mobile";
+            if (mobile == isMobileTier)
+                cycleableQualityLevels.Add(i);
+        }
+
+        if (cycleableQualityLevels.Count == 0)
+            cycleableQualityLevels.Add(QualitySettings.GetQualityLevel());
     }
 
     void RefreshSettingsLabels()
@@ -308,73 +338,32 @@ public class MainMenuUI : MonoBehaviour
 
         if (qualityLabel != null)
         {
+            EnsureCycleableQualityLevels();
             string[] names = QualitySettings.names;
             int q = GameSettingsStore.GetSavedQuality();
             string name = names != null && q >= 0 && q < names.Length ? names[q] : "Default";
-            qualityLabel.text = $"QUALITY  {name.ToUpperInvariant()}";
+            qualityLabel.text = cycleableQualityLevels.Count <= 1
+                ? $"QUALITY  {name.ToUpperInvariant()}  (ONLY TIER)"
+                : $"QUALITY  {name.ToUpperInvariant()}";
         }
     }
 
     void RefreshControlsText()
     {
-        if (controlsBody == null)
+        if (controlsBody == null || controlsTextBuilt)
             return;
 
-        var sb = new StringBuilder(512);
-        sb.AppendLine("CURRENT BINDINGS");
-        sb.AppendLine();
+        controlsBody.text = ControlsCopy;
+        controlsTextBuilt = true;
 
-        bool appendedFromInput = TryAppendInputSystemBindings(sb);
-        if (!appendedFromInput)
-        {
-            sb.AppendLine("Move - WASD / Left Stick");
-            sb.AppendLine("Aim - Mouse / Right Stick");
-            sb.AppendLine("Shoot - Left Click / Right Shoulder");
-            sb.AppendLine("Dash - Left Shift / Right Trigger");
-        }
+        if (controlsScrollContent == null)
+            return;
 
-        sb.AppendLine();
-        sb.AppendLine("ALSO IN-GAME");
-        sb.AppendLine("Weapon Switch - Scroll Wheel / 1-4 / D-pad");
-        sb.AppendLine("Map - Tab / Select");
-        sb.AppendLine("Help - H");
-        sb.AppendLine("Pause - Esc / Start");
-        sb.AppendLine();
-        sb.Append("Rebinding is not available in this build - bindings follow the Input System asset and gameplay extras above.");
-
-        controlsBody.text = sb.ToString();
-    }
-
-    static bool TryAppendInputSystemBindings(StringBuilder sb)
-    {
-        InputActionAsset actions = InputSystem.actions;
-        if (actions == null)
-            return false;
-
-        InputActionMap map = actions.FindActionMap("Player", throwIfNotFound: false);
-        if (map == null)
-            return false;
-
-        string[] focus = { "Move", "Look", "Attack", "Dash" };
-        string[] labels = { "Move", "Aim / Look", "Shoot / Attack", "Dash" };
-        bool any = false;
-        for (int i = 0; i < focus.Length; i++)
-        {
-            InputAction action = map.FindAction(focus[i], throwIfNotFound: false);
-            if (action == null)
-                continue;
-
-            string bindings = action.GetBindingDisplayString(InputBinding.DisplayStringOptions.DontUseShortDisplayNames);
-            if (string.IsNullOrWhiteSpace(bindings))
-                bindings = action.GetBindingDisplayString();
-            if (string.IsNullOrWhiteSpace(bindings))
-                continue;
-
-            sb.Append(labels[i]).Append(" - ").AppendLine(bindings);
-            any = true;
-        }
-
-        return any;
+        Canvas.ForceUpdateCanvases();
+        float height = Mathf.Max(controlsBody.preferredHeight + 32f, 200f);
+        controlsBody.rectTransform.sizeDelta = new Vector2(-40f, height);
+        controlsScrollContent.sizeDelta = new Vector2(0f, height);
+        controlsScrollContent.anchoredPosition = Vector2.zero;
     }
 
     void BuildCanvas()
@@ -503,46 +492,49 @@ public class MainMenuUI : MonoBehaviour
         titleRect.sizeDelta = new Vector2(-40f, 44f);
 
         Image listPanel = CreateImage("Name List", modifiersTab.transform, new Color(0.04f, 0.055f, 0.06f, 0.95f));
+        listPanel.raycastTarget = true;
         RectTransform listRect = listPanel.rectTransform;
         listRect.anchorMin = new Vector2(0f, 0f);
         listRect.anchorMax = new Vector2(0f, 1f);
-        listRect.pivot = new Vector2(0f, 0.5f);
-        listRect.anchoredPosition = new Vector2(24f, -8f);
-        listRect.sizeDelta = new Vector2(280f, -100f);
         listRect.offsetMin = new Vector2(24f, 70f);
         listRect.offsetMax = new Vector2(304f, -72f);
 
         Image detailPanel = CreateImage("Description", modifiersTab.transform, new Color(0.04f, 0.055f, 0.06f, 0.95f));
         RectTransform detailRect = detailPanel.rectTransform;
+        detailRect.anchorMin = new Vector2(0f, 0f);
+        detailRect.anchorMax = new Vector2(1f, 1f);
         detailRect.offsetMin = new Vector2(324f, 70f);
         detailRect.offsetMax = new Vector2(-24f, -72f);
 
-        modifierDetailTitle = CreateText("Detail Title", detailPanel.transform, string.Empty, 28, Accent, TextAnchor.UpperLeft);
+        modifierDetailTitle = CreateText("Detail Title", detailRect, string.Empty, 28, Accent, TextAnchor.UpperLeft);
         modifierDetailTitle.fontStyle = FontStyle.Bold;
         RectTransform detailTitleRect = modifierDetailTitle.rectTransform;
         detailTitleRect.anchorMin = new Vector2(0f, 1f);
         detailTitleRect.anchorMax = new Vector2(1f, 1f);
         detailTitleRect.pivot = new Vector2(0f, 1f);
-        detailTitleRect.anchoredPosition = new Vector2(20f, -18f);
-        detailTitleRect.sizeDelta = new Vector2(-40f, 36f);
+        detailTitleRect.anchoredPosition = new Vector2(22f, -18f);
+        detailTitleRect.sizeDelta = new Vector2(-44f, 36f);
 
-        modifierDetailBody = CreateText("Detail Body", detailPanel.transform, string.Empty, 22, BodyText, TextAnchor.UpperLeft);
+        modifierDetailBody = CreateText("Detail Body", detailRect, string.Empty, 22, BodyText, TextAnchor.UpperLeft);
         modifierDetailBody.horizontalOverflow = HorizontalWrapMode.Wrap;
         modifierDetailBody.verticalOverflow = VerticalWrapMode.Overflow;
+        modifierDetailBody.lineSpacing = 1.08f;
         RectTransform detailBodyRect = modifierDetailBody.rectTransform;
         detailBodyRect.anchorMin = Vector2.zero;
         detailBodyRect.anchorMax = Vector2.one;
-        detailBodyRect.offsetMin = new Vector2(20f, 16f);
-        detailBodyRect.offsetMax = new Vector2(-20f, -64f);
+        detailBodyRect.offsetMin = new Vector2(22f, 18f);
+        detailBodyRect.offsetMax = new Vector2(-22f, -64f);
 
         modifierNameButtons.Clear();
-        float y = -16f;
+        float buttonHeight = 48f;
+        float buttonGap = 10f;
+        float y = -18f;
         for (int i = 0; i < GameCatalogData.Modifiers.Length; i++)
         {
             int index = i;
             Button button = CreateButton(
                 $"modifier_{i}",
-                listPanel.transform,
+                listRect,
                 GameCatalogData.Modifiers[i].Name.ToUpperInvariant(),
                 ButtonSecondary,
                 Color.white);
@@ -551,10 +543,20 @@ public class MainMenuUI : MonoBehaviour
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
             rect.anchoredPosition = new Vector2(0f, y);
-            rect.sizeDelta = new Vector2(-20f, 44f);
+            rect.sizeDelta = new Vector2(-16f, buttonHeight);
+            Text label = button.GetComponentInChildren<Text>();
+            if (label != null)
+            {
+                label.fontSize = 18;
+                label.alignment = TextAnchor.MiddleLeft;
+                RectTransform labelRect = label.rectTransform;
+                labelRect.offsetMin = new Vector2(14f, 0f);
+                labelRect.offsetMax = new Vector2(-10f, 0f);
+            }
+
             button.onClick.AddListener(() => SelectModifier(index));
             modifierNameButtons.Add(button);
-            y -= 52f;
+            y -= buttonHeight + buttonGap;
         }
 
         modifiersBackButton = CreateButton("Back", modifiersTab.transform, "BACK", ButtonPrimary, Color.white);
@@ -566,6 +568,7 @@ public class MainMenuUI : MonoBehaviour
         backRect.sizeDelta = new Vector2(180f, 44f);
         modifiersBackButton.onClick.AddListener(ShowMain);
 
+        SelectModifier(0);
         modifiersTab.SetActive(false);
     }
 
@@ -589,101 +592,133 @@ public class MainMenuUI : MonoBehaviour
         titleRect.sizeDelta = new Vector2(-40f, 44f);
 
         Image listPanel = CreateImage("Name List", enemiesTab.transform, new Color(0.04f, 0.055f, 0.06f, 0.95f));
+        listPanel.raycastTarget = true;
         RectTransform listRect = listPanel.rectTransform;
+        listRect.anchorMin = new Vector2(0f, 0f);
+        listRect.anchorMax = new Vector2(0f, 1f);
         listRect.offsetMin = new Vector2(24f, 70f);
         listRect.offsetMax = new Vector2(320f, -72f);
 
-        GameObject viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
-        viewport.transform.SetParent(listPanel.transform, false);
-        Image viewportImage = viewport.GetComponent<Image>();
-        viewportImage.color = new Color(1f, 1f, 1f, 0.01f);
-        StretchFull(viewport.GetComponent<RectTransform>());
-        Mask mask = viewport.GetComponent<Mask>();
-        mask.showMaskGraphic = false;
+        ScrollRect scroll = listPanel.gameObject.AddComponent<ScrollRect>();
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 42f;
+        scroll.inertia = true;
+        scroll.decelerationRate = 0.135f;
 
-        GameObject content = new GameObject("Content", typeof(RectTransform), typeof(ContentSizeFitter), typeof(VerticalLayoutGroup));
-        content.transform.SetParent(viewport.transform, false);
-        RectTransform contentRect = content.GetComponent<RectTransform>();
+        Image viewportImage = CreateImage("Viewport", listRect, new Color(1f, 1f, 1f, 0.01f));
+        viewportImage.raycastTarget = true;
+        RectTransform viewportRect = viewportImage.rectTransform;
+        StretchFull(viewportRect);
+        viewportRect.offsetMin = new Vector2(8f, 8f);
+        viewportRect.offsetMax = new Vector2(-8f, -8f);
+        viewportImage.gameObject.AddComponent<RectMask2D>();
+
+        var contentGo = new GameObject("Content", typeof(RectTransform));
+        contentGo.transform.SetParent(viewportRect, false);
+        RectTransform contentRect = contentGo.GetComponent<RectTransform>();
         contentRect.anchorMin = new Vector2(0f, 1f);
         contentRect.anchorMax = new Vector2(1f, 1f);
         contentRect.pivot = new Vector2(0.5f, 1f);
         contentRect.anchoredPosition = Vector2.zero;
-        contentRect.sizeDelta = new Vector2(0f, 0f);
-        var fitter = content.GetComponent<ContentSizeFitter>();
-        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-        var layout = content.GetComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(10, 10, 10, 10);
-        layout.spacing = 8f;
-        layout.childAlignment = TextAnchor.UpperCenter;
-        layout.childControlHeight = true;
-        layout.childControlWidth = true;
-        layout.childForceExpandHeight = false;
-        layout.childForceExpandWidth = true;
 
-        var scroll = listPanel.gameObject.AddComponent<ScrollRect>();
-        scroll.viewport = viewport.GetComponent<RectTransform>();
+        scroll.viewport = viewportRect;
         scroll.content = contentRect;
-        scroll.horizontal = false;
-        scroll.vertical = true;
-        scroll.movementType = ScrollRect.MovementType.Clamped;
-        scroll.scrollSensitivity = 28f;
 
         Image detailPanel = CreateImage("Description", enemiesTab.transform, new Color(0.04f, 0.055f, 0.06f, 0.95f));
         RectTransform detailRect = detailPanel.rectTransform;
+        detailRect.anchorMin = new Vector2(0f, 0f);
+        detailRect.anchorMax = new Vector2(1f, 1f);
         detailRect.offsetMin = new Vector2(340f, 70f);
         detailRect.offsetMax = new Vector2(-24f, -72f);
 
-        enemyDetailTitle = CreateText("Detail Title", detailPanel.transform, string.Empty, 28, Accent, TextAnchor.UpperLeft);
+        enemyDetailTitle = CreateText("Detail Title", detailRect, string.Empty, 28, Accent, TextAnchor.UpperLeft);
         enemyDetailTitle.fontStyle = FontStyle.Bold;
         RectTransform detailTitleRect = enemyDetailTitle.rectTransform;
         detailTitleRect.anchorMin = new Vector2(0f, 1f);
         detailTitleRect.anchorMax = new Vector2(1f, 1f);
         detailTitleRect.pivot = new Vector2(0f, 1f);
-        detailTitleRect.anchoredPosition = new Vector2(20f, -18f);
-        detailTitleRect.sizeDelta = new Vector2(-40f, 36f);
+        detailTitleRect.anchoredPosition = new Vector2(22f, -18f);
+        detailTitleRect.sizeDelta = new Vector2(-44f, 36f);
 
-        enemyDetailBody = CreateText("Detail Body", detailPanel.transform, string.Empty, 22, BodyText, TextAnchor.UpperLeft);
+        enemyDetailBody = CreateText("Detail Body", detailRect, string.Empty, 22, BodyText, TextAnchor.UpperLeft);
         enemyDetailBody.horizontalOverflow = HorizontalWrapMode.Wrap;
         enemyDetailBody.verticalOverflow = VerticalWrapMode.Overflow;
+        enemyDetailBody.lineSpacing = 1.08f;
         RectTransform detailBodyRect = enemyDetailBody.rectTransform;
         detailBodyRect.anchorMin = Vector2.zero;
         detailBodyRect.anchorMax = Vector2.one;
-        detailBodyRect.offsetMin = new Vector2(20f, 16f);
-        detailBodyRect.offsetMax = new Vector2(-20f, -64f);
+        detailBodyRect.offsetMin = new Vector2(22f, 18f);
+        detailBodyRect.offsetMax = new Vector2(-22f, -64f);
 
         enemyNameButtons.Clear();
+        float buttonHeight = 44f;
+        float headerHeight = 28f;
+        float buttonGap = 8f;
+        float headerGap = 12f;
+        float topPadding = 6f;
+        float bottomPadding = 6f;
+        float y = topPadding;
         string lastCategory = null;
+
         for (int i = 0; i < GameCatalogData.Enemies.Length; i++)
         {
             GameCatalogData.EnemyInfo info = GameCatalogData.Enemies[i];
-            if (info.Category != lastCategory)
+            string category = string.IsNullOrEmpty(info.Category) ? "OTHER" : info.Category;
+            if (category != lastCategory)
             {
-                lastCategory = info.Category;
+                if (lastCategory != null)
+                    y += headerGap;
+
                 Text header = CreateText(
-                    $"cat_{info.Category}",
-                    content.transform,
-                    info.Category,
-                    16,
-                    new Color(1f, 1f, 1f, 0.45f),
+                    $"Category_{category}",
+                    contentRect,
+                    category,
+                    15,
+                    new Color(0.55f, 0.95f, 0.78f, 0.9f),
                     TextAnchor.MiddleLeft);
-                var headerLayout = header.gameObject.AddComponent<LayoutElement>();
-                headerLayout.minHeight = 24f;
-                headerLayout.preferredHeight = 24f;
+                header.fontStyle = FontStyle.Bold;
+                RectTransform headerRect = header.rectTransform;
+                headerRect.anchorMin = new Vector2(0f, 1f);
+                headerRect.anchorMax = new Vector2(1f, 1f);
+                headerRect.pivot = new Vector2(0.5f, 1f);
+                headerRect.anchoredPosition = new Vector2(0f, -y);
+                headerRect.sizeDelta = new Vector2(-8f, headerHeight);
+                y += headerHeight + 4f;
+                lastCategory = category;
             }
 
             int index = i;
             Button button = CreateButton(
                 $"enemy_{i}",
-                content.transform,
+                contentRect,
                 info.Name.ToUpperInvariant(),
                 ButtonSecondary,
                 Color.white);
-            var buttonLayout = button.gameObject.AddComponent<LayoutElement>();
-            buttonLayout.minHeight = 40f;
-            buttonLayout.preferredHeight = 40f;
+            RectTransform buttonRect = button.GetComponent<RectTransform>();
+            buttonRect.anchorMin = new Vector2(0f, 1f);
+            buttonRect.anchorMax = new Vector2(1f, 1f);
+            buttonRect.pivot = new Vector2(0.5f, 1f);
+            buttonRect.anchoredPosition = new Vector2(0f, -y);
+            buttonRect.sizeDelta = new Vector2(0f, buttonHeight);
+            Text label = button.GetComponentInChildren<Text>();
+            if (label != null)
+            {
+                label.fontSize = 17;
+                label.alignment = TextAnchor.MiddleLeft;
+                RectTransform labelRect = label.rectTransform;
+                labelRect.offsetMin = new Vector2(12f, 0f);
+                labelRect.offsetMax = new Vector2(-8f, 0f);
+            }
+
             button.onClick.AddListener(() => SelectEnemy(index));
             enemyNameButtons.Add(button);
+            y += buttonHeight + buttonGap;
         }
+
+        float contentHeight = y - buttonGap + bottomPadding;
+        contentRect.sizeDelta = new Vector2(0f, Mathf.Max(contentHeight, 0f));
 
         enemiesBackButton = CreateButton("Back", enemiesTab.transform, "BACK", ButtonPrimary, Color.white);
         RectTransform backRect = enemiesBackButton.GetComponent<RectTransform>();
@@ -694,6 +729,7 @@ public class MainMenuUI : MonoBehaviour
         backRect.sizeDelta = new Vector2(180f, 44f);
         enemiesBackButton.onClick.AddListener(ShowMain);
 
+        SelectEnemy(0);
         enemiesTab.SetActive(false);
     }
 
@@ -728,15 +764,54 @@ public class MainMenuUI : MonoBehaviour
         PlaceSettingsSectionTab(settingsQualityTabButton, 280f);
         settingsQualityTabButton.onClick.AddListener(() => ShowSettingsSection(2));
 
+        settingsSectionButtons.Clear();
+        settingsSectionButtons.Add(settingsControlsTabButton);
+        settingsSectionButtons.Add(settingsDisplayTabButton);
+        settingsSectionButtons.Add(settingsQualityTabButton);
+
         settingsControlsPanel = CreateSettingsContentPanel("Controls Panel");
-        controlsBody = CreateText("Controls Body", settingsControlsPanel.transform, string.Empty, 22, BodyText, TextAnchor.UpperLeft);
+        Image controlsRoot = settingsControlsPanel.GetComponent<Image>();
+        if (controlsRoot != null)
+            controlsRoot.raycastTarget = true;
+
+        ScrollRect controlsScroll = settingsControlsPanel.AddComponent<ScrollRect>();
+        controlsScroll.horizontal = false;
+        controlsScroll.vertical = true;
+        controlsScroll.movementType = ScrollRect.MovementType.Clamped;
+        controlsScroll.scrollSensitivity = 40f;
+        controlsScroll.inertia = true;
+        controlsScroll.decelerationRate = 0.135f;
+
+        Image controlsViewport = CreateImage("Viewport", settingsControlsPanel.transform, new Color(1f, 1f, 1f, 0.02f));
+        controlsViewport.raycastTarget = true;
+        RectTransform controlsViewportRect = controlsViewport.rectTransform;
+        StretchFull(controlsViewportRect);
+        controlsViewportRect.offsetMin = new Vector2(8f, 8f);
+        controlsViewportRect.offsetMax = new Vector2(-8f, -8f);
+        controlsViewport.gameObject.AddComponent<RectMask2D>();
+
+        var controlsContentGo = new GameObject("Content", typeof(RectTransform));
+        controlsContentGo.transform.SetParent(controlsViewportRect, false);
+        controlsScrollContent = controlsContentGo.GetComponent<RectTransform>();
+        controlsScrollContent.anchorMin = new Vector2(0f, 1f);
+        controlsScrollContent.anchorMax = new Vector2(1f, 1f);
+        controlsScrollContent.pivot = new Vector2(0.5f, 1f);
+        controlsScrollContent.anchoredPosition = Vector2.zero;
+        controlsScrollContent.sizeDelta = new Vector2(0f, 420f);
+
+        controlsScroll.viewport = controlsViewportRect;
+        controlsScroll.content = controlsScrollContent;
+
+        controlsBody = CreateText("Controls Body", controlsScrollContent, string.Empty, 22, BodyText, TextAnchor.UpperLeft);
         controlsBody.horizontalOverflow = HorizontalWrapMode.Wrap;
         controlsBody.verticalOverflow = VerticalWrapMode.Overflow;
+        controlsBody.lineSpacing = 1.05f;
         RectTransform controlsRect = controlsBody.rectTransform;
-        controlsRect.anchorMin = Vector2.zero;
-        controlsRect.anchorMax = Vector2.one;
-        controlsRect.offsetMin = new Vector2(24f, 16f);
-        controlsRect.offsetMax = new Vector2(-24f, -16f);
+        controlsRect.anchorMin = new Vector2(0f, 1f);
+        controlsRect.anchorMax = new Vector2(1f, 1f);
+        controlsRect.pivot = new Vector2(0.5f, 1f);
+        controlsRect.anchoredPosition = new Vector2(0f, 0f);
+        controlsRect.sizeDelta = new Vector2(-40f, 420f);
 
         settingsDisplayPanel = CreateSettingsContentPanel("Display Panel");
         resolutionLabel = CreateText("Resolution Label", settingsDisplayPanel.transform, "RESOLUTION", 24, BodyText, TextAnchor.MiddleCenter);
@@ -777,7 +852,7 @@ public class MainMenuUI : MonoBehaviour
         Text qualityHint = CreateText(
             "Quality Hint",
             settingsQualityPanel.transform,
-            "Cycles Unity quality levels (URP pipeline asset follows the active quality tier).",
+            "Cycles Low / Medium / High (URP pipeline asset follows the active quality tier).",
             18,
             new Color(1f, 1f, 1f, 0.5f),
             TextAnchor.MiddleCenter);
@@ -799,6 +874,7 @@ public class MainMenuUI : MonoBehaviour
     {
         Image panel = CreateImage(name, settingsTab.transform, new Color(0.04f, 0.055f, 0.06f, 0.95f));
         RectTransform rect = panel.rectTransform;
+        StretchFull(rect);
         rect.offsetMin = new Vector2(24f, 70f);
         rect.offsetMax = new Vector2(-24f, -120f);
         return panel.gameObject;
