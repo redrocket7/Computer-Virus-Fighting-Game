@@ -254,13 +254,7 @@ public class OutOfBoundsCover : MonoBehaviour
         var renderer = coverObject.GetComponent<MeshRenderer>();
         Material source = coverMaterial;
         if (source == null)
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-                shader = Shader.Find("Standard");
-
-            source = new Material(shader) { name = "Out Of Bounds Cover" };
-        }
+            source = RuntimeEffectMaterials.CreateOpaque(new Color(0.12f, 0.12f, 0.14f, 1f), "Out Of Bounds Cover");
 
         if (coverInstance == null || coverInstance.shader != source.shader)
         {

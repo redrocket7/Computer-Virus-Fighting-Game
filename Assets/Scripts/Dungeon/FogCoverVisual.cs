@@ -47,10 +47,7 @@ public static class FogCoverVisual
         bool createdTemp = false;
         if (source == null)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-                ?? Shader.Find("Unlit/Color")
-                ?? Shader.Find("Universal Render Pipeline/Lit");
-            source = new Material(shader) { name = "Fog Cover Fallback" };
+            source = RuntimeEffectMaterials.CreateOpaque(Color.gray, "Fog Cover Fallback");
             createdTemp = true;
         }
 

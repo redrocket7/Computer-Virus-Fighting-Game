@@ -84,7 +84,9 @@ public static class PlayerRegistry
             if (candidate == null || candidate.IsDead)
                 continue;
 
-            float sqr = (candidate.transform.position - worldPosition).sqrMagnitude;
+            Vector3 delta = candidate.transform.position - worldPosition;
+            delta.y = 0f;
+            float sqr = delta.sqrMagnitude;
             if (sqr >= bestSqr)
                 continue;
 
@@ -217,6 +219,111 @@ public static class PlayerRegistry
         }
 
         return !AnyAlive;
+    }
+
+    public static int LivingCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (players[i] != null && !players[i].IsDead)
+                    count++;
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// True when every living player is within <paramref name="radius"/> of the point.
+    /// </summary>
+    public static bool AllLivingNear(Vector3 point, float radius)
+    {
+        float radiusSqr = Mathf.Max(0.01f, radius) * Mathf.Max(0.01f, radius);
+        int living = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            PlayerController candidate = players[i];
+            if (candidate == null || candidate.IsDead)
+                continue;
+
+            living++;
+            if (FlatSqrDistance(candidate.transform.position, point) > radiusSqr)
+                return false;
+        }
+
+        return living > 0;
+    }
+
+    /// <summary>True when at least one living player is within radius of the point.</summary>
+    public static bool AnyLivingNear(Vector3 point, float radius)
+    {
+        float radiusSqr = Mathf.Max(0.01f, radius) * Mathf.Max(0.01f, radius);
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            PlayerController candidate = players[i];
+            if (candidate == null || candidate.IsDead)
+                continue;
+
+            if (FlatSqrDistance(candidate.transform.position, point) <= radiusSqr)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when every living player is within <paramref name="radius"/> of
+    /// either point A or point B (nearby dual sample, e.g. both faces of a door).
+    /// </summary>
+    public static bool AllLivingNearEither(Vector3 pointA, Vector3 pointB, float radius)
+    {
+        float radiusSqr = Mathf.Max(0.01f, radius) * Mathf.Max(0.01f, radius);
+        int living = 0;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            PlayerController candidate = players[i];
+            if (candidate == null || candidate.IsDead)
+                continue;
+
+            living++;
+            Vector3 pos = candidate.transform.position;
+            if (FlatSqrDistance(pos, pointA) > radiusSqr && FlatSqrDistance(pos, pointB) > radiusSqr)
+                return false;
+        }
+
+        return living > 0;
+    }
+
+    /// <summary>True when at least one living player is within radius of either point.</summary>
+    public static bool AnyLivingNearEither(Vector3 pointA, Vector3 pointB, float radius)
+    {
+        float radiusSqr = Mathf.Max(0.01f, radius) * Mathf.Max(0.01f, radius);
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            PlayerController candidate = players[i];
+            if (candidate == null || candidate.IsDead)
+                continue;
+
+            Vector3 pos = candidate.transform.position;
+            if (FlatSqrDistance(pos, pointA) <= radiusSqr || FlatSqrDistance(pos, pointB) <= radiusSqr)
+                return true;
+        }
+
+        return false;
+    }
+
+    static float FlatSqrDistance(Vector3 a, Vector3 b)
+    {
+        float dx = a.x - b.x;
+        float dz = a.z - b.z;
+        return dx * dx + dz * dz;
     }
 
     public static Vector3 GetCoopSpawnOffset(int playerIndex)

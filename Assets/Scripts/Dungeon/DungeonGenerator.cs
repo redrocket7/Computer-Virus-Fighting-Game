@@ -750,6 +750,8 @@ public class DungeonGenerator : MonoBehaviour
         openSocket.ConnectTo(incoming);
         openSocket.SetLocked(false, instant: true);
         incoming.SetLocked(false, instant: true);
+        CoopDoorwayGate.EnsureOn(openSocket);
+        CoopDoorwayGate.EnsureOn(incoming);
         for (int i = 0; i < candidatePassages.Count; i++)
         {
             if (candidatePassages[i] != null)

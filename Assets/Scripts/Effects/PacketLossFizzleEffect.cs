@@ -337,38 +337,10 @@ public class PacketLossFizzleEffect : MonoBehaviour
 
     static Material CreateTransparentMaterial(Color color, bool emissive)
     {
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-            ?? Shader.Find("Universal Render Pipeline/Lit")
-            ?? Shader.Find("Unlit/Color");
-
-        var material = new Material(shader)
-        {
-            name = emissive ? "PacketLossGlitchRuntime" : "PacketLossPixelRuntime",
-            renderQueue = 3000
-        };
-
-        if (shader.name.Contains("Universal Render Pipeline"))
-        {
-            material.SetFloat("_Surface", 1f);
-            material.SetFloat("_Blend", 0f);
-            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            material.SetFloat("_ZWrite", 0f);
-            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            material.SetOverrideTag("RenderType", "Transparent");
-        }
-
-        material.SetColor("_BaseColor", color);
-        material.SetColor("_Color", color);
-        if (emissive && material.HasProperty("_EmissionColor"))
-        {
-            material.EnableKeyword("_EMISSION");
-            material.SetColor("_EmissionColor", color * 2.5f);
-        }
-
-        material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-        return material;
+        return RuntimeEffectMaterials.CreateTransparent(
+            color,
+            emissive,
+            emissive ? "PacketLossGlitchRuntime" : "PacketLossPixelRuntime");
     }
 
     static float EaseOut(float t) => 1f - (1f - t) * (1f - t);

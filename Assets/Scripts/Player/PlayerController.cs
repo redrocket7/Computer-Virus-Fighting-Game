@@ -473,17 +473,13 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     Vector2 ReadLookStick()
     {
-        // In local co-op, read the paired pad directly so Look isn't shared/stolen
-        // across PlayerInput action assets after clone + device pairing.
-        if (forceGamepadOnly && playerIndex < Gamepad.all.Count)
-            return Gamepad.all[playerIndex].rightStick.ReadValue();
-
-        CacheLookAction();
-        if (lookAction != null)
-            return lookAction.ReadValue<Vector2>();
-
+        // Never use the Look InputAction here: it also binds <Pointer>/delta, which
+        // makes mouse movement act like a stick and breaks position-based mouse aim.
         if (playerIndex < Gamepad.all.Count)
             return Gamepad.all[playerIndex].rightStick.ReadValue();
+
+        if (forceGamepadOnly)
+            return Vector2.zero;
 
         Gamepad pad = Gamepad.current;
         return pad != null ? pad.rightStick.ReadValue() : Vector2.zero;

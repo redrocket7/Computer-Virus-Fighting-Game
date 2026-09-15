@@ -114,28 +114,6 @@ public class CriticalProcessSilhouette : MonoBehaviour
 
     static Material CreateSilhouetteMaterial(Color color)
     {
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-            ?? Shader.Find("Universal Render Pipeline/Lit")
-            ?? Shader.Find("Unlit/Color");
-
-        var material = new Material(shader)
-        {
-            name = "CriticalProcessSilhouette",
-            renderQueue = 3000
-        };
-
-        if (shader != null && shader.name.Contains("Universal Render Pipeline"))
-        {
-            material.SetFloat("_Surface", 1f);
-            material.SetFloat("_Blend", 0f);
-            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            material.SetFloat("_ZWrite", 0f);
-            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        }
-
-        material.SetColor("_BaseColor", color);
-        material.SetColor("_Color", color);
-        return material;
+        return RuntimeEffectMaterials.CreateTransparent(color, emissive: false, materialName: "CriticalProcessSilhouette");
     }
 }

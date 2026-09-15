@@ -42,6 +42,8 @@ public class EnemyAI : MonoBehaviour, IDamageable
     IDamageable playerDamageable;
     float combatHoldoff;
     float playerFindRetryTimer;
+    PlayerController trackedPlayer;
+    const float PlayerRetargetInterval = 0.15f;
 
     float baseMoveSpeed = -1f;
     float moveSpeedMultiplier = 1f;
@@ -82,10 +84,7 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
     protected virtual void Start()
     {
-        if (player == null)
-            FindPlayer();
-
-        Player = player;
+        RefreshPlayerTarget(force: true);
         CacheBaseMoveSpeed();
 
         if (ShowSupportPriorityMarker)
@@ -146,6 +145,9 @@ public class EnemyAI : MonoBehaviour, IDamageable
 
     protected void TickHoldoff()
     {
+        // Keep a living nearest-player target for chase and ranged AI overrides.
+        RefreshPlayerTarget();
+
         if (combatHoldoff <= 0f)
             return;
 
@@ -164,6 +166,9 @@ public class EnemyAI : MonoBehaviour, IDamageable
             attackTimer -= Time.deltaTime;
 
         if (contactDamage <= 0f || Player == null || attackTimer > 0f)
+            return;
+
+        if (trackedPlayer != null && trackedPlayer.IsDead)
             return;
 
         Vector3 offset = Player.position - transform.position;
@@ -207,16 +212,13 @@ public class EnemyAI : MonoBehaviour, IDamageable
             return;
         }
 
-        playerFindRetryTimer -= Time.deltaTime;
-        if (playerFindRetryTimer <= 0f || player == null)
-        {
-            playerFindRetryTimer = 0.5f;
-            FindPlayer();
-        }
+        RefreshPlayerTarget();
 
         if (player == null)
         {
             Player = null;
+            trackedPlayer = null;
+            playerDamageable = null;
             StopAgentPath();
             IsChasing = false;
             return;
@@ -601,23 +603,37 @@ public class EnemyAI : MonoBehaviour, IDamageable
         boundEncounter = null;
     }
 
+    /// <summary>
+    /// Picks the nearest living player. Dead avatars stay in-scene, so we must
+    /// never keep a corpse transform as the combat target.
+    /// </summary>
+    protected void RefreshPlayerTarget(bool force = false)
+    {
+        playerFindRetryTimer -= Time.deltaTime;
+
+        bool currentInvalid = trackedPlayer == null ||
+                              trackedPlayer.IsDead ||
+                              player == null ||
+                              (trackedPlayer != null && player != trackedPlayer.transform);
+
+        if (!force && !currentInvalid && playerFindRetryTimer > 0f)
+            return;
+
+        playerFindRetryTimer = PlayerRetargetInterval;
+        FindPlayer();
+    }
+
     protected void FindPlayer()
     {
+        PlayerController previous = trackedPlayer;
         PlayerController nearest = PlayerRegistry.GetNearestLiving(transform.position);
-        if (nearest != null)
-        {
-            player = nearest.transform;
-            return;
-        }
 
-        player = null;
-        GameObject tagged = GameObject.FindGameObjectWithTag("Player");
-        if (tagged != null)
-        {
-            PlayerController taggedPlayer = tagged.GetComponentInParent<PlayerController>();
-            if (taggedPlayer == null || !taggedPlayer.IsDead)
-                player = tagged.transform;
-        }
+        trackedPlayer = nearest;
+        player = nearest != null ? nearest.transform : null;
+        Player = player;
+
+        if (previous != trackedPlayer)
+            playerDamageable = null;
     }
 
     protected void FaceDirection(Vector3 direction)

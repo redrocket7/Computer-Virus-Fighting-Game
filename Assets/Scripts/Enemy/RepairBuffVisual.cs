@@ -173,33 +173,7 @@ public class RepairBuffVisual : MonoBehaviour
 
     static Material CreateTransparentMaterial(Color color, string name)
     {
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-            ?? Shader.Find("Universal Render Pipeline/Lit")
-            ?? Shader.Find("Unlit/Color");
-
-        var material = new Material(shader)
-        {
-            name = name,
-            renderQueue = 3000
-        };
-
-        if (shader.name.Contains("Universal Render Pipeline"))
-        {
-            material.SetFloat("_Surface", 1f);
-            material.SetFloat("_Blend", 0f);
-            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            material.SetFloat("_ZWrite", 0f);
-            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            material.EnableKeyword("_ALPHAPREMULTIPLY_ON");
-        }
-
-        material.SetColor("_BaseColor", color);
-        material.SetColor("_Color", color);
-        if (material.HasProperty("_EmissionColor"))
-            material.SetColor("_EmissionColor", color * 1.35f);
-        material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-        return material;
+        return RuntimeEffectMaterials.CreateTransparent(color, emissive: true, materialName: name);
     }
 
     static Mesh BuildRingMesh(float outerRadius, float innerRadius, int segments)

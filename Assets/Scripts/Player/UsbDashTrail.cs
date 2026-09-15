@@ -108,28 +108,15 @@ public class UsbDashTrail : MonoBehaviour
         if (sharedTrailMaterial != null)
             return;
 
-        if (cachedShader == null)
-        {
-            cachedShader = Shader.Find("Universal Render Pipeline/Unlit")
-                ?? Shader.Find("Unlit/Color");
-        }
+        sharedTrailMaterial = RuntimeEffectMaterials.CreateTransparent(
+            new Color(0.35f, 0.85f, 1f, 0.65f),
+            emissive: true,
+            materialName: "UsbDashTrailShared");
+        sharedTrailMaterial.hideFlags = HideFlags.HideAndDontSave;
 
-        sharedTrailMaterial = new Material(cachedShader)
-        {
-            name = "UsbDashTrailShared",
-            renderQueue = 3000,
-            hideFlags = HideFlags.HideAndDontSave
-        };
-
-        sharedMaterialIsUrp = cachedShader != null && cachedShader.name.Contains("Universal Render Pipeline");
-        if (sharedMaterialIsUrp)
-        {
-            sharedTrailMaterial.SetFloat("_Surface", 1f);
-            sharedTrailMaterial.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-            sharedTrailMaterial.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-            sharedTrailMaterial.SetFloat("_ZWrite", 0f);
-            sharedTrailMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            sharedTrailMaterial.SetOverrideTag("RenderType", "Transparent");
-        }
+        cachedShader = sharedTrailMaterial.shader;
+        sharedMaterialIsUrp = cachedShader != null &&
+                              (cachedShader.name.Contains("Universal Render Pipeline") ||
+                               cachedShader.name.Contains("RuntimeEffectUnlit"));
     }
 }
